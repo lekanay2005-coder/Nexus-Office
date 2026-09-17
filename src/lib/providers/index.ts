@@ -23,10 +23,17 @@ export const DEFAULT_PROVIDER_CONFIG: ProviderConfig = {
   model: "claude-sonnet-4-5-20250929",
 };
 
+// Local/dev escape hatch: set NEXUS_MOCK_LLM=1 to run the full pipeline
+// against canned, role-aware responses instead of calling a real provider.
+// Lets us test routing, persistence, and the UI without API keys/spend.
+const MOCK_LLM = process.env.NEXUS_MOCK_LLM === "1";
+
 export async function complete(
   config: ProviderConfig,
   req: CompletionRequest
 ): Promise<CompletionResult> {
+  if (MOCK_LLM) return completeMock(req);
+
   switch (config.provider) {
     case "anthropic":
       return completeAnthropic(config.model, req);
@@ -37,6 +44,58 @@ export async function complete(
     default:
       throw new Error(`Unknown provider: ${config.provider}`);
   }
+}
+
+const BUILD_KEYWORDS = [
+  "build",
+  "create",
+  "add",
+  "implement",
+  "fix",
+  "write",
+  "refactor",
+  "update",
+  "change",
+  "make",
+];
+
+async function completeMock({ system, prompt }: CompletionRequest): Promise<CompletionResult> {
+  const text = mockResponseFor(system, prompt);
+  return {
+    text,
+    tokensIn: Math.ceil((system.length + prompt.length) / 4),
+    tokensOut: Math.ceil(text.length / 4),
+  };
+}
+
+function mockResponseFor(system: string, prompt: string): string {
+  if (system.includes("You are the Strategist")) {
+    const userMessage = (prompt.match(/USER MESSAGE:\n([\s\S]*)/)?.[1] ?? prompt).toLowerCase();
+    const isBuildRequest = BUILD_KEYWORDS.some((kw) => userMessage.includes(kw));
+
+    if (!isBuildRequest) {
+      return `ROUTE: DIRECT\n[mock] Here's a direct answer to: "${userMessage.trim()}". (This is a mocked Strategist response — no build work needed.)`;
+    }
+    return `ROUTE: PIPELINE\n[mock] Plan: build a simple static landing page per the user's request. Builder should create an index.html with a heading and a short paragraph.`;
+  }
+
+  if (system.includes("You are the Builder")) {
+    return `[mock] Implemented the plan.\n\n\`\`\`path=index.html\n<!doctype html>\n<html>\n  <head><title>Mock Page</title></head>\n  <body>\n    <h1>Hello from Nexus Office</h1>\n    <p>This page was written by the mocked Builder role.</p>\n  </body>\n</html>\n\`\`\``;
+  }
+
+  if (system.includes("You are the Analyst")) {
+    return `[mock] Reviewed the Builder's output: the markup is valid and self-contained. No external dependencies, so no compatibility risk. Consider adding a viewport meta tag before shipping.`;
+  }
+
+  if (system.includes("You are QA")) {
+    return `[mock] Suggested checks: (1) open index.html in a browser and confirm the heading renders, (2) validate HTML via a linter, (3) check mobile viewport once a meta tag is added.`;
+  }
+
+  if (system.includes("You are Ops")) {
+    return `[mock] Summary: built a static landing page with a heading and paragraph; Analyst flagged a missing viewport tag; QA suggested manual + lint checks.\n\n\`\`\`memory-update\n{\n  "decisions": ["Built an initial static landing page (index.html) per user request"],\n  "open_issues": ["Add a viewport meta tag to index.html"],\n  "tech_stack": ["Static HTML"]\n}\n\`\`\``;
+  }
+
+  return "[mock] No matching role prompt detected.";
 }
 
 async function completeAnthropic(
