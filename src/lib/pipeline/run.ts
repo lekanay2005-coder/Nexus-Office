@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ROLES, type ProjectMemory, type Role } from "@/types/db";
-import { complete, DEFAULT_PROVIDER_CONFIG, type ProviderConfig } from "@/lib/providers";
+import { complete, DEFAULT_PROVIDER_CONFIG, type ProviderConfig, type ProviderName } from "@/lib/providers";
 import { ROLE_SYSTEM_PROMPTS } from "@/lib/pipeline/roles";
 import { formatMemoryForPrompt, extractMemoryUpdate, stripMemoryBlock } from "@/lib/pipeline/memory";
 import { extractFilesFromBuilderOutput } from "@/lib/pipeline/extractFiles";
+import { decryptSecret } from "@/lib/crypto";
 import { randomUUID } from "crypto";
 
 export interface PipelineStepResult {
@@ -41,6 +42,10 @@ export async function runPipeline({
 }: RunPipelineArgs): Promise<PipelineRunResult> {
   const memory = await loadMemory(supabase, projectId);
   const memoryText = formatMemoryForPrompt(memory);
+  const effectiveRoleConfig = {
+    ...(await loadRoleConfig(supabase, projectId, userId)),
+    ...roleConfig,
+  };
 
   const { data: run, error: runError } = await supabase
     .from("pipeline_runs")
@@ -62,7 +67,7 @@ export async function runPipeline({
 
   try {
     // --- Step 1: Strategist decides route ---
-    const strategistConfig = roleConfig?.strategist ?? DEFAULT_PROVIDER_CONFIG;
+    const strategistConfig = effectiveRoleConfig.strategist ?? DEFAULT_PROVIDER_CONFIG;
     const strategistPrompt = `${memoryText}\n\nUSER MESSAGE:\n${userMessage}`;
     const strategistResult = await complete(strategistConfig, {
       system: ROLE_SYSTEM_PROMPTS.strategist,
@@ -102,7 +107,7 @@ export async function runPipeline({
     let stepOrder = 2;
 
     for (const role of ROLES.filter((r) => r !== "strategist")) {
-      const config = roleConfig?.[role] ?? DEFAULT_PROVIDER_CONFIG;
+      const config = effectiveRoleConfig[role] ?? DEFAULT_PROVIDER_CONFIG;
       const prompt = buildRolePrompt(memoryText, userMessage, priorOutputs);
 
       const result = await complete(config, {
@@ -163,6 +168,46 @@ export async function runPipeline({
       .eq("id", run.id);
     throw err;
   }
+}
+
+// Builds each role's ProviderConfig from the Model Router's role_models
+// table, attaching the user's decrypted API key for that provider when one
+// has been saved. Roles with no row fall back to DEFAULT_PROVIDER_CONFIG
+// (and the server's env-var key) in the caller.
+async function loadRoleConfig(
+  supabase: SupabaseClient,
+  projectId: string,
+  userId: string
+): Promise<Partial<Record<Role, ProviderConfig>>> {
+  const [{ data: roleModels }, { data: apiKeys }] = await Promise.all([
+    supabase.from("role_models").select("*").eq("project_id", projectId),
+    supabase.from("api_keys").select("*").eq("user_id", userId),
+  ]);
+
+  const keysByProvider = new Map<ProviderName, string>();
+  for (const row of apiKeys ?? []) {
+    try {
+      keysByProvider.set(row.provider as ProviderName, decryptSecret(row.encrypted_key));
+    } catch {
+      // Skip a key we can't decrypt (e.g. NEXUS_ENCRYPTION_KEY rotated)
+      // rather than failing the whole run; the provider call will fall
+      // back to the server's env var key, or fail clearly at call time.
+    }
+  }
+
+  const rowByRole = new Map((roleModels ?? []).map((r) => [r.role as Role, r]));
+
+  const config: Partial<Record<Role, ProviderConfig>> = {};
+  for (const role of ROLES) {
+    const row = rowByRole.get(role);
+    const provider = (row?.provider as ProviderName) ?? DEFAULT_PROVIDER_CONFIG.provider;
+    config[role] = {
+      provider,
+      model: row?.model ?? DEFAULT_PROVIDER_CONFIG.model,
+      apiKey: keysByProvider.get(provider),
+    };
+  }
+  return config;
 }
 
 async function loadMemory(supabase: SupabaseClient, projectId: string): Promise<ProjectMemory> {

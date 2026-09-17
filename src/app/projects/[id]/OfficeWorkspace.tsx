@@ -4,19 +4,25 @@ import { useState } from "react";
 import Link from "next/link";
 import ChatPanel, { type RunWithSteps } from "@/components/chat/ChatPanel";
 import CodeCanvas from "@/components/canvas/CodeCanvas";
-import type { Project, ProjectFile, ProjectMemory } from "@/types/db";
+import ModelRouterPanel from "@/components/settings/ModelRouterPanel";
+import type { Project, ProjectFile, ProjectMemory, Role } from "@/types/db";
+import type { ProviderName } from "@/lib/providers";
 
-type Tab = "chat" | "canvas";
+type Tab = "chat" | "canvas" | "settings";
 
 export default function OfficeWorkspace({
   project,
   initialRuns,
   initialFiles,
+  initialRoleModels,
+  initialApiKeyProviders,
 }: {
   project: Project;
   initialRuns: RunWithSteps[];
   initialFiles: ProjectFile[];
   initialMemory: ProjectMemory | null;
+  initialRoleModels: { role: Role; provider: ProviderName; model: string }[];
+  initialApiKeyProviders: ProviderName[];
 }) {
   const [tab, setTab] = useState<Tab>("chat");
   const [canvasKey, setCanvasKey] = useState(0);
@@ -37,11 +43,17 @@ export default function OfficeWorkspace({
           <TabButton active={tab === "canvas"} onClick={() => setTab("canvas")}>
             Code Canvas
           </TabButton>
+          <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>
+            Settings
+          </TabButton>
         </nav>
+        <Link href="/prompts" className="text-sm text-neutral-500 hover:text-neutral-300">
+          Prompt Vault
+        </Link>
       </header>
 
-      <main className="min-h-0 flex-1">
-        {tab === "chat" ? (
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        {tab === "chat" && (
           <div className="mx-auto h-full max-w-3xl">
             <ChatPanel
               projectId={project.id}
@@ -49,8 +61,16 @@ export default function OfficeWorkspace({
               onFilesChanged={() => setCanvasKey((k) => k + 1)}
             />
           </div>
-        ) : (
+        )}
+        {tab === "canvas" && (
           <CodeCanvas key={canvasKey} projectId={project.id} initialFiles={initialFiles} />
+        )}
+        {tab === "settings" && (
+          <ModelRouterPanel
+            projectId={project.id}
+            initialRoleModels={initialRoleModels}
+            initialApiKeyProviders={initialApiKeyProviders}
+          />
         )}
       </main>
     </div>

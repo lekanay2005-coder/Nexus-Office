@@ -14,6 +14,10 @@ export type ProviderName = "anthropic" | "openai" | "google";
 export interface ProviderConfig {
   provider: ProviderName;
   model: string;
+  // User-supplied key from the Model Router settings (api_keys table),
+  // decrypted just before the call. Falls back to the server env var
+  // for the matching provider when omitted.
+  apiKey?: string;
 }
 
 // MVP default: every role runs on Claude. The Model Router (v2) will let
@@ -36,11 +40,11 @@ export async function complete(
 
   switch (config.provider) {
     case "anthropic":
-      return completeAnthropic(config.model, req);
+      return completeAnthropic(config.model, config.apiKey, req);
     case "openai":
-      return completeOpenAI(config.model, req);
+      return completeOpenAI(config.model, config.apiKey, req);
     case "google":
-      return completeGoogle(config.model, req);
+      return completeGoogle(config.model, config.apiKey, req);
     default:
       throw new Error(`Unknown provider: ${config.provider}`);
   }
@@ -100,11 +104,12 @@ function mockResponseFor(system: string, prompt: string): string {
 
 async function completeAnthropic(
   model: string,
+  apiKey: string | undefined,
   { system, prompt }: CompletionRequest
 ): Promise<CompletionResult> {
   const AnthropicModule = await import("@anthropic-ai/sdk");
   const Anthropic = AnthropicModule.default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = new Anthropic({ apiKey: apiKey ?? process.env.ANTHROPIC_API_KEY });
 
   const msg = await client.messages.create({
     model,
@@ -127,10 +132,11 @@ async function completeAnthropic(
 
 async function completeOpenAI(
   model: string,
+  apiKey: string | undefined,
   { system, prompt }: CompletionRequest
 ): Promise<CompletionResult> {
   const { default: OpenAI } = await import("openai");
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey: apiKey ?? process.env.OPENAI_API_KEY });
 
   const res = await client.chat.completions.create({
     model,
@@ -149,10 +155,11 @@ async function completeOpenAI(
 
 async function completeGoogle(
   model: string,
+  apiKey: string | undefined,
   { system, prompt }: CompletionRequest
 ): Promise<CompletionResult> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
-  const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+  const client = new GoogleGenerativeAI((apiKey ?? process.env.GOOGLE_API_KEY)!);
   const genModel = client.getGenerativeModel({ model, systemInstruction: system });
 
   const res = await genModel.generateContent(prompt);

@@ -21,9 +21,14 @@ export default async function ProjectsPage() {
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Your Projects</h1>
-          <form action="/auth/signout" method="post">
-            <SignOutButton />
-          </form>
+          <div className="flex items-center gap-4">
+            <Link href="/prompts" className="text-sm text-neutral-400 hover:text-neutral-200">
+              Prompt Vault
+            </Link>
+            <form action="/auth/signout" method="post">
+              <SignOutButton />
+            </form>
+          </div>
         </div>
 
         <NewProjectForm />

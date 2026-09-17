@@ -41,12 +41,24 @@ export default async function ProjectPage({
     .eq("project_id", id)
     .maybeSingle();
 
+  const { data: roleModels } = await supabase
+    .from("role_models")
+    .select("*")
+    .eq("project_id", id);
+
+  const { data: apiKeys } = await supabase
+    .from("api_keys")
+    .select("provider")
+    .eq("user_id", user.id);
+
   return (
     <OfficeWorkspace
       project={project}
       initialRuns={runs ?? []}
       initialFiles={files ?? []}
       initialMemory={memory}
+      initialRoleModels={roleModels ?? []}
+      initialApiKeyProviders={(apiKeys ?? []).map((k) => k.provider)}
     />
   );
 }
