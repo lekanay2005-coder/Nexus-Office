@@ -73,6 +73,20 @@ export interface ProjectFile {
   updated_at: string;
 }
 
+export type DeployStatus = "pending" | "building" | "ready" | "error";
+
+export interface Deploy {
+  id: string;
+  project_id: string;
+  status: DeployStatus;
+  github_commit_sha: string | null;
+  branch: string | null;
+  vercel_deployment_id: string | null;
+  deployment_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Prompt {
   id: string;
   user_id: string;

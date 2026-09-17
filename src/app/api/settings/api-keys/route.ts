@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptSecret } from "@/lib/crypto";
 
-const PROVIDERS = ["anthropic", "openai", "google"] as const;
+const PROVIDERS = ["anthropic", "openai", "google", "github", "vercel"] as const;
 
 // Returns which providers have a key saved — never the key itself.
 export async function GET() {

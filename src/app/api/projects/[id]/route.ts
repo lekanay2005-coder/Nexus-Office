@@ -30,3 +30,36 @@ export async function GET(
 
   return NextResponse.json({ project, memory });
 }
+
+// Body: { github_repo?: string, vercel_project_id?: string }
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+
+  const patch: Record<string, unknown> = {};
+  if (typeof body.github_repo === "string") patch.github_repo = body.github_repo.trim() || null;
+  if (typeof body.vercel_project_id === "string") {
+    patch.vercel_project_id = body.vercel_project_id.trim() || null;
+  }
+  patch.updated_at = new Date().toISOString();
+
+  const { data: project, error } = await supabase
+    .from("projects")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ project });
+}

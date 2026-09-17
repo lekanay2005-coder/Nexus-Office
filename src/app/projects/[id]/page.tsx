@@ -51,6 +51,14 @@ export default async function ProjectPage({
     .select("provider")
     .eq("user_id", user.id);
 
+  const { data: deploys } = await supabase
+    .from("deploys")
+    .select("*")
+    .eq("project_id", id)
+    .order("created_at", { ascending: false });
+
+  const configuredProviders = (apiKeys ?? []).map((k) => k.provider);
+
   return (
     <OfficeWorkspace
       project={project}
@@ -58,7 +66,14 @@ export default async function ProjectPage({
       initialFiles={files ?? []}
       initialMemory={memory}
       initialRoleModels={roleModels ?? []}
-      initialApiKeyProviders={(apiKeys ?? []).map((k) => k.provider)}
+      initialApiKeyProviders={configuredProviders.filter(
+        (p): p is "anthropic" | "openai" | "google" =>
+          p === "anthropic" || p === "openai" || p === "google"
+      )}
+      initialConnectionProviders={configuredProviders.filter(
+        (p): p is "github" | "vercel" => p === "github" || p === "vercel"
+      )}
+      initialDeploys={deploys ?? []}
     />
   );
 }

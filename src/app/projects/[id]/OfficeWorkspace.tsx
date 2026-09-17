@@ -5,10 +5,13 @@ import Link from "next/link";
 import ChatPanel, { type RunWithSteps } from "@/components/chat/ChatPanel";
 import CodeCanvas from "@/components/canvas/CodeCanvas";
 import ModelRouterPanel from "@/components/settings/ModelRouterPanel";
-import type { Project, ProjectFile, ProjectMemory, Role } from "@/types/db";
+import ConnectionsPanel from "@/components/settings/ConnectionsPanel";
+import DeployDesk from "@/components/deploy/DeployDesk";
+import type { Deploy, Project, ProjectFile, ProjectMemory, Role } from "@/types/db";
 import type { ProviderName } from "@/lib/providers";
 
-type Tab = "chat" | "canvas" | "settings";
+type Tab = "chat" | "canvas" | "settings" | "deploy";
+type ConnectionProvider = "github" | "vercel";
 
 export default function OfficeWorkspace({
   project,
@@ -16,6 +19,8 @@ export default function OfficeWorkspace({
   initialFiles,
   initialRoleModels,
   initialApiKeyProviders,
+  initialConnectionProviders,
+  initialDeploys,
 }: {
   project: Project;
   initialRuns: RunWithSteps[];
@@ -23,6 +28,8 @@ export default function OfficeWorkspace({
   initialMemory: ProjectMemory | null;
   initialRoleModels: { role: Role; provider: ProviderName; model: string }[];
   initialApiKeyProviders: ProviderName[];
+  initialConnectionProviders: ConnectionProvider[];
+  initialDeploys: Deploy[];
 }) {
   const [tab, setTab] = useState<Tab>("chat");
   const [canvasKey, setCanvasKey] = useState(0);
@@ -42,6 +49,9 @@ export default function OfficeWorkspace({
           </TabButton>
           <TabButton active={tab === "canvas"} onClick={() => setTab("canvas")}>
             Code Canvas
+          </TabButton>
+          <TabButton active={tab === "deploy"} onClick={() => setTab("deploy")}>
+            Deploy Desk
           </TabButton>
           <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>
             Settings
@@ -65,12 +75,20 @@ export default function OfficeWorkspace({
         {tab === "canvas" && (
           <CodeCanvas key={canvasKey} projectId={project.id} initialFiles={initialFiles} />
         )}
+        {tab === "deploy" && (
+          <DeployDesk project={project} initialDeploys={initialDeploys} />
+        )}
         {tab === "settings" && (
-          <ModelRouterPanel
-            projectId={project.id}
-            initialRoleModels={initialRoleModels}
-            initialApiKeyProviders={initialApiKeyProviders}
-          />
+          <div className="space-y-10">
+            <ModelRouterPanel
+              projectId={project.id}
+              initialRoleModels={initialRoleModels}
+              initialApiKeyProviders={initialApiKeyProviders}
+            />
+            <div className="mx-auto max-w-2xl px-6 pb-8">
+              <ConnectionsPanel initialConfigured={initialConnectionProviders} />
+            </div>
+          </div>
         )}
       </main>
     </div>
