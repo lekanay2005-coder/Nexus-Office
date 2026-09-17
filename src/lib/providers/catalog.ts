@@ -24,3 +24,23 @@ export const PROVIDER_LABELS: Record<ProviderName, string> = {
   openai: "OpenAI",
   google: "Google",
 };
+
+// Illustrative USD price per 1M tokens — approximate list prices, not fetched
+// live. Good enough for the Cost Meter's running estimate; an unmatched
+// model just shows raw token counts with no dollar figure.
+export const MODEL_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
+  "claude-opus-4-1": { inputPer1M: 15, outputPer1M: 75 },
+  "claude-sonnet-4-5-20250929": { inputPer1M: 3, outputPer1M: 15 },
+  "claude-haiku-4-5-20251001": { inputPer1M: 1, outputPer1M: 5 },
+  "gpt-5": { inputPer1M: 5, outputPer1M: 15 },
+  "gpt-5-mini": { inputPer1M: 0.25, outputPer1M: 2 },
+  "gpt-4o": { inputPer1M: 2.5, outputPer1M: 10 },
+  "gemini-2.5-pro": { inputPer1M: 1.25, outputPer1M: 10 },
+  "gemini-2.5-flash": { inputPer1M: 0.3, outputPer1M: 2.5 },
+};
+
+export function estimateCostUsd(model: string, tokensIn: number, tokensOut: number): number | null {
+  const pricing = MODEL_PRICING[model];
+  if (!pricing) return null;
+  return (tokensIn / 1_000_000) * pricing.inputPer1M + (tokensOut / 1_000_000) * pricing.outputPer1M;
+}

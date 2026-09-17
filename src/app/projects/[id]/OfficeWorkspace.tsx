@@ -7,16 +7,19 @@ import CodeCanvas from "@/components/canvas/CodeCanvas";
 import ModelRouterPanel from "@/components/settings/ModelRouterPanel";
 import ConnectionsPanel from "@/components/settings/ConnectionsPanel";
 import DeployDesk from "@/components/deploy/DeployDesk";
+import MemoryBoard from "@/components/memory/MemoryBoard";
+import CostMeter from "@/components/cost/CostMeter";
 import type { Deploy, Project, ProjectFile, ProjectMemory, Role } from "@/types/db";
 import type { ProviderName } from "@/lib/providers";
 
-type Tab = "chat" | "canvas" | "settings" | "deploy";
+type Tab = "chat" | "canvas" | "memory" | "settings" | "deploy" | "cost";
 type ConnectionProvider = "github" | "vercel";
 
 export default function OfficeWorkspace({
   project,
   initialRuns,
   initialFiles,
+  initialMemory,
   initialRoleModels,
   initialApiKeyProviders,
   initialConnectionProviders,
@@ -50,8 +53,14 @@ export default function OfficeWorkspace({
           <TabButton active={tab === "canvas"} onClick={() => setTab("canvas")}>
             Code Canvas
           </TabButton>
+          <TabButton active={tab === "memory"} onClick={() => setTab("memory")}>
+            Memory Board
+          </TabButton>
           <TabButton active={tab === "deploy"} onClick={() => setTab("deploy")}>
             Deploy Desk
+          </TabButton>
+          <TabButton active={tab === "cost"} onClick={() => setTab("cost")}>
+            Cost Meter
           </TabButton>
           <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>
             Settings
@@ -75,9 +84,13 @@ export default function OfficeWorkspace({
         {tab === "canvas" && (
           <CodeCanvas key={canvasKey} projectId={project.id} initialFiles={initialFiles} />
         )}
+        {tab === "memory" && (
+          <MemoryBoard projectId={project.id} initialMemory={initialMemory} />
+        )}
         {tab === "deploy" && (
           <DeployDesk project={project} initialDeploys={initialDeploys} />
         )}
+        {tab === "cost" && <CostMeter projectId={project.id} />}
         {tab === "settings" && (
           <div className="space-y-10">
             <ModelRouterPanel
