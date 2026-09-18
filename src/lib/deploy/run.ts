@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { pushFilesToGitHub } from "./github";
 import { getLatestDeployment, mapVercelStateToDeployStatus } from "./vercel";
 import { getDecryptedApiKey } from "@/lib/apiKeys";
+import { decryptSecret } from "@/lib/crypto";
 
 // Local/dev escape hatch mirroring NEXUS_MOCK_LLM: set NEXUS_MOCK_DEPLOY=1
 // to exercise the full Deploy Desk flow (push -> deploy row -> status
@@ -12,9 +13,18 @@ export interface StartDeployArgs {
   supabase: SupabaseClient;
   projectId: string;
   userId: string;
+  // Optional hosting integration to trigger via its deploy-hook URL, in
+  // addition to the GitHub push. Not required — Vercel via GitHub's own
+  // integration remains the default path.
+  hostingIntegrationId?: string;
 }
 
-export async function startDeploy({ supabase, projectId, userId }: StartDeployArgs) {
+export async function startDeploy({
+  supabase,
+  projectId,
+  userId,
+  hostingIntegrationId,
+}: StartDeployArgs) {
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("github_repo, vercel_project_id")
@@ -42,10 +52,15 @@ export async function startDeploy({ supabase, projectId, userId }: StartDeployAr
         status: "building",
         github_commit_sha: commitSha,
         branch: "main",
+        hosting_integration_id: hostingIntegrationId ?? null,
       })
       .select()
       .single();
     if (error) throw new Error(error.message);
+    await supabase
+      .from("projects")
+      .update({ last_synced_to_github_at: new Date().toISOString() })
+      .eq("id", projectId);
     return deploy;
   }
 
@@ -68,10 +83,74 @@ export async function startDeploy({ supabase, projectId, userId }: StartDeployAr
       status: "building",
       github_commit_sha: commitSha,
       branch,
+      hosting_integration_id: hostingIntegrationId ?? null,
     })
     .select()
     .single();
   if (error) throw new Error(error.message);
+
+  // Update the project's sync timestamp now that the push itself succeeded,
+  // independent of whether a hosting trigger or Vercel status check below
+  // succeeds too.
+  await supabase
+    .from("projects")
+    .update({ last_synced_to_github_at: new Date().toISOString() })
+    .eq("id", projectId);
+
+  if (hostingIntegrationId) {
+    // Generic deploy-hook trigger: most non-Vercel hosts (Netlify, Render,
+    // etc.) expose a plain webhook URL that kicks off a build. There's no
+    // generic status API across hosts, so this is fire-and-forget — the
+    // deploy row is marked "ready" once the trigger itself succeeds
+    // (meaning "successfully triggered", not "confirmed live").
+    const { data: integration } = await supabase
+      .from("integrations")
+      .select("*")
+      .eq("id", hostingIntegrationId)
+      .eq("project_id", projectId)
+      .single();
+
+    if (integration?.base_url) {
+      const headers: Record<string, string> = {};
+      if (integration.api_key_encrypted) {
+        try {
+          headers.Authorization = `Bearer ${decryptSecret(integration.api_key_encrypted)}`;
+        } catch {
+          // Trigger without auth rather than fail the whole deploy.
+        }
+      }
+      try {
+        const res = await fetch(integration.base_url, { method: "POST", headers });
+        await supabase
+          .from("deploys")
+          .update({
+            status: res.ok ? "ready" : "error",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", deploy.id);
+      } catch (err) {
+        await supabase
+          .from("deploys")
+          .update({
+            status: "error",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", deploy.id);
+        throw new Error(
+          `GitHub push succeeded, but triggering ${integration.name} failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      }
+    }
+
+    const { data: updated } = await supabase
+      .from("deploys")
+      .select("*")
+      .eq("id", deploy.id)
+      .single();
+    return updated ?? deploy;
+  }
 
   // Best-effort immediate check — Vercel's GitHub integration may already
   // have picked up the push by the time we ask. If not, the client polls
@@ -112,6 +191,13 @@ export async function refreshDeployStatus({
     .single();
 
   if (deployError || !deploy) throw new Error("Deploy not found");
+
+  if (deploy.hosting_integration_id) {
+    // Generic deploy-hook triggers have no status API to poll — the row's
+    // status was already set to its final value ("ready" or "error") when
+    // the trigger request itself completed.
+    return deploy;
+  }
 
   if (MOCK_DEPLOY) {
     const { data: updated, error } = await supabase

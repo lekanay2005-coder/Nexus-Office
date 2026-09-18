@@ -6,10 +6,11 @@ import ChatPanel, { type RunWithSteps } from "@/components/chat/ChatPanel";
 import CodeCanvas from "@/components/canvas/CodeCanvas";
 import ModelRouterPanel from "@/components/settings/ModelRouterPanel";
 import ConnectionsPanel from "@/components/settings/ConnectionsPanel";
+import IntegrationsPanel from "@/components/settings/IntegrationsPanel";
 import DeployDesk from "@/components/deploy/DeployDesk";
 import MemoryBoard from "@/components/memory/MemoryBoard";
 import CostMeter from "@/components/cost/CostMeter";
-import type { Deploy, Project, ProjectFile, ProjectMemory, Role } from "@/types/db";
+import type { Deploy, Integration, Project, ProjectFile, ProjectMemory, Role } from "@/types/db";
 import type { ProviderName } from "@/lib/providers";
 
 type Tab = "chat" | "canvas" | "memory" | "settings" | "deploy" | "cost";
@@ -24,15 +25,17 @@ export default function OfficeWorkspace({
   initialApiKeyProviders,
   initialConnectionProviders,
   initialDeploys,
+  initialIntegrations,
 }: {
   project: Project;
   initialRuns: RunWithSteps[];
   initialFiles: ProjectFile[];
   initialMemory: ProjectMemory | null;
-  initialRoleModels: { role: Role; provider: ProviderName; model: string }[];
+  initialRoleModels: { role: Role; provider: string; model: string }[];
   initialApiKeyProviders: ProviderName[];
   initialConnectionProviders: ConnectionProvider[];
   initialDeploys: Deploy[];
+  initialIntegrations: Integration[];
 }) {
   const [tab, setTab] = useState<Tab>("chat");
   const [canvasKey, setCanvasKey] = useState(0);
@@ -88,7 +91,11 @@ export default function OfficeWorkspace({
           <MemoryBoard projectId={project.id} initialMemory={initialMemory} />
         )}
         {tab === "deploy" && (
-          <DeployDesk project={project} initialDeploys={initialDeploys} />
+          <DeployDesk
+            project={project}
+            initialDeploys={initialDeploys}
+            hostingIntegrations={initialIntegrations.filter((i) => i.type === "hosting")}
+          />
         )}
         {tab === "cost" && <CostMeter projectId={project.id} />}
         {tab === "settings" && (
@@ -97,9 +104,15 @@ export default function OfficeWorkspace({
               projectId={project.id}
               initialRoleModels={initialRoleModels}
               initialApiKeyProviders={initialApiKeyProviders}
+              customIntegrationNames={initialIntegrations
+                .filter((i) => i.type === "ai_provider")
+                .map((i) => i.name)}
             />
-            <div className="mx-auto max-w-2xl px-6 pb-8">
+            <div className="mx-auto max-w-2xl px-6">
               <ConnectionsPanel initialConfigured={initialConnectionProviders} />
+            </div>
+            <div className="mx-auto max-w-2xl px-6 pb-8">
+              <IntegrationsPanel projectId={project.id} initialIntegrations={initialIntegrations} />
             </div>
           </div>
         )}

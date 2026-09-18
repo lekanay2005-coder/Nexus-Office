@@ -20,7 +20,12 @@ export default function LoginPage() {
     setStatus(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        // repo scope lets Deploy Desk's "Save to GitHub" push directly with
+        // the user's own OAuth token instead of requiring a separate PAT.
+        scopes: "read:user user:email repo",
+      },
     });
     if (error) {
       setStatus(error.message);

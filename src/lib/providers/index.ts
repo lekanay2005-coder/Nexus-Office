@@ -12,12 +12,17 @@ export interface CompletionResult {
 export type ProviderName = "anthropic" | "openai" | "google";
 
 export interface ProviderConfig {
-  provider: ProviderName;
+  // One of the built-in ProviderNames, or the name of a project-level
+  // ai_provider integration (see the `integrations` table) for anything
+  // else — resolved as a generic OpenAI-compatible chat completions call.
+  provider: string;
   model: string;
-  // User-supplied key from the Model Router settings (api_keys table),
-  // decrypted just before the call. Falls back to the server env var
-  // for the matching provider when omitted.
+  // User-supplied key from the Model Router settings (api_keys table) or
+  // from an integrations row, decrypted just before the call. Falls back
+  // to the server env var for the matching built-in provider when omitted.
   apiKey?: string;
+  // Required when `provider` is a custom integration name.
+  baseUrl?: string;
 }
 
 // Default provider/model for any role without an explicit role_models row.
@@ -47,7 +52,12 @@ export async function complete(
     case "google":
       return completeGoogle(config.model, config.apiKey, req);
     default:
-      throw new Error(`Unknown provider: ${config.provider}`);
+      if (!config.baseUrl) {
+        throw new Error(
+          `Unknown provider "${config.provider}" and no base URL configured for it.`
+        );
+      }
+      return completeCustom(config.baseUrl, config.apiKey, config.model, req);
   }
 }
 
@@ -185,5 +195,43 @@ async function completeGoogle(
     text: res.response.text(),
     tokensIn: usage?.promptTokenCount ?? 0,
     tokensOut: usage?.candidatesTokenCount ?? 0,
+  };
+}
+
+// Generic call for any project-level ai_provider integration — assumes an
+// OpenAI-compatible /chat/completions endpoint, which covers OpenRouter,
+// Together AI, and most other OpenAI-compatible gateways without needing
+// provider-specific code.
+async function completeCustom(
+  baseUrl: string,
+  apiKey: string | undefined,
+  model: string,
+  { system, prompt }: CompletionRequest
+): Promise<CompletionResult> {
+  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Custom provider call to ${baseUrl} failed: ${res.status} ${body}`);
+  }
+
+  const data = await res.json();
+  return {
+    text: data.choices?.[0]?.message?.content ?? "",
+    tokensIn: data.usage?.prompt_tokens ?? 0,
+    tokensOut: data.usage?.completion_tokens ?? 0,
   };
 }

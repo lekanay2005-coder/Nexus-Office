@@ -8,20 +8,23 @@ import { DEFAULT_PROVIDER_CONFIG, type ProviderName } from "@/lib/providers";
 
 interface RoleModelRow {
   role: Role;
-  provider: ProviderName;
+  provider: string;
   model: string;
 }
 
 const PROVIDERS: ProviderName[] = ["anthropic", "openai", "google"];
+const BUILT_IN_PROVIDERS = new Set<string>(PROVIDERS);
 
 export default function ModelRouterPanel({
   projectId,
   initialRoleModels,
   initialApiKeyProviders,
+  customIntegrationNames,
 }: {
   projectId: string;
   initialRoleModels: RoleModelRow[];
   initialApiKeyProviders: ProviderName[];
+  customIntegrationNames: string[];
 }) {
   const [assignments, setAssignments] = useState<Record<Role, RoleModelRow>>(() => {
     const map = {} as Record<Role, RoleModelRow>;
@@ -47,7 +50,7 @@ export default function ModelRouterPanel({
   const [savingKey, setSavingKey] = useState<ProviderName | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function saveAssignment(role: Role, provider: ProviderName, model: string) {
+  async function saveAssignment(role: Role, provider: string, model: string) {
     setSavingRole(role);
     setError(null);
     setAssignments((prev) => ({ ...prev, [role]: { role, provider, model } }));
@@ -113,9 +116,10 @@ export default function ModelRouterPanel({
         <div className="space-y-2">
           {ROLES.map((role) => {
             const current = assignments[role];
-            const modelsForProvider = MODEL_CATALOG.filter(
-              (m) => m.provider === current.provider
-            );
+            const isBuiltIn = BUILT_IN_PROVIDERS.has(current.provider);
+            const modelsForProvider = isBuiltIn
+              ? MODEL_CATALOG.filter((m) => m.provider === current.provider)
+              : [];
             return (
               <div
                 key={role}
@@ -132,31 +136,57 @@ export default function ModelRouterPanel({
                 <select
                   value={current.provider}
                   onChange={(e) => {
-                    const provider = e.target.value as ProviderName;
+                    const provider = e.target.value;
                     const firstModel =
                       MODEL_CATALOG.find((m) => m.provider === provider)?.model ?? "";
                     saveAssignment(role, provider, firstModel);
                   }}
                   className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100"
                 >
-                  {PROVIDERS.map((p) => (
-                    <option key={p} value={p}>
-                      {PROVIDER_LABELS[p]}
-                    </option>
-                  ))}
+                  <optgroup label="Built-in">
+                    {PROVIDERS.map((p) => (
+                      <option key={p} value={p}>
+                        {PROVIDER_LABELS[p]}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {customIntegrationNames.length > 0 && (
+                    <optgroup label="Integrations">
+                      {customIntegrationNames.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
 
-                <select
-                  value={current.model}
-                  onChange={(e) => saveAssignment(role, current.provider, e.target.value)}
-                  className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100"
-                >
-                  {modelsForProvider.map((m) => (
-                    <option key={m.model} value={m.model}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                {isBuiltIn ? (
+                  <select
+                    value={current.model}
+                    onChange={(e) => saveAssignment(role, current.provider, e.target.value)}
+                    className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100"
+                  >
+                    {modelsForProvider.map((m) => (
+                      <option key={m.model} value={m.model}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={current.model}
+                    onChange={(e) =>
+                      setAssignments((prev) => ({
+                        ...prev,
+                        [role]: { ...prev[role], model: e.target.value },
+                      }))
+                    }
+                    onBlur={(e) => saveAssignment(role, current.provider, e.target.value)}
+                    placeholder="Model name for this integration"
+                    className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100 outline-none focus:border-neutral-500"
+                  />
+                )}
 
                 {savingRole === role && (
                   <span className="text-[11px] text-neutral-500">Saving…</span>

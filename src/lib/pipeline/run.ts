@@ -176,17 +176,20 @@ export async function runPipeline({
 }
 
 // Builds each role's ProviderConfig from the Model Router's role_models
-// table, attaching the user's decrypted API key for that provider when one
-// has been saved. Roles with no row fall back to DEFAULT_PROVIDER_CONFIG
-// (and the server's env-var key) in the caller.
+// table. A role's provider is either a built-in ProviderName (with the
+// user's decrypted api_keys row for that provider, if saved) or the name
+// of an ai_provider integration for this project (with that integration's
+// own base URL + decrypted key). Roles with no row fall back to
+// DEFAULT_PROVIDER_CONFIG (and the server's env-var key) in the caller.
 async function loadRoleConfig(
   supabase: SupabaseClient,
   projectId: string,
   userId: string
 ): Promise<Partial<Record<Role, ProviderConfig>>> {
-  const [{ data: roleModels }, { data: apiKeys }] = await Promise.all([
+  const [{ data: roleModels }, { data: apiKeys }, { data: integrations }] = await Promise.all([
     supabase.from("role_models").select("*").eq("project_id", projectId),
     supabase.from("api_keys").select("*").eq("user_id", userId),
+    supabase.from("integrations").select("*").eq("project_id", projectId).eq("type", "ai_provider"),
   ]);
 
   const keysByProvider = new Map<ProviderName, string>();
@@ -200,16 +203,37 @@ async function loadRoleConfig(
     }
   }
 
+  const integrationsByName = new Map((integrations ?? []).map((i) => [i.name, i]));
+
   const rowByRole = new Map((roleModels ?? []).map((r) => [r.role as Role, r]));
 
   const config: Partial<Record<Role, ProviderConfig>> = {};
   for (const role of ROLES) {
     const row = rowByRole.get(role);
-    const provider = (row?.provider as ProviderName) ?? DEFAULT_PROVIDER_CONFIG.provider;
+    const provider = row?.provider ?? DEFAULT_PROVIDER_CONFIG.provider;
+    const integration = integrationsByName.get(provider);
+
+    if (integration) {
+      let apiKey: string | undefined;
+      try {
+        apiKey = decryptSecret(integration.api_key_encrypted);
+      } catch {
+        // Fall through with no key — the custom provider call will fail
+        // clearly rather than silently using a stale/undecryptable one.
+      }
+      config[role] = {
+        provider,
+        model: row?.model ?? DEFAULT_PROVIDER_CONFIG.model,
+        apiKey,
+        baseUrl: integration.base_url ?? undefined,
+      };
+      continue;
+    }
+
     config[role] = {
       provider,
       model: row?.model ?? DEFAULT_PROVIDER_CONFIG.model,
-      apiKey: keysByProvider.get(provider),
+      apiKey: keysByProvider.get(provider as ProviderName),
     };
   }
   return config;

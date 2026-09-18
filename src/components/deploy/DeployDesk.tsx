@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Deploy, DeployStatus, Project } from "@/types/db";
+import SaveToGitHub from "./SaveToGitHub";
+import type { Deploy, DeployStatus, Integration, Project } from "@/types/db";
 
 const STATUS_STYLES: Record<DeployStatus, string> = {
   pending: "bg-neutral-700 text-neutral-200",
@@ -13,16 +14,20 @@ const STATUS_STYLES: Record<DeployStatus, string> = {
 export default function DeployDesk({
   project,
   initialDeploys,
+  hostingIntegrations,
 }: {
   project: Project;
   initialDeploys: Deploy[];
+  hostingIntegrations: Integration[];
 }) {
   const [githubRepo, setGithubRepo] = useState(project.github_repo ?? "");
   const [vercelProjectId, setVercelProjectId] = useState(project.vercel_project_id ?? "");
+  const [hostingIntegrationId, setHostingIntegrationId] = useState("");
   const [savingConfig, setSavingConfig] = useState(false);
   const [deploys, setDeploys] = useState<Deploy[]>(initialDeploys);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSynced, setLastSynced] = useState(project.last_synced_to_github_at);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function saveConfig() {
@@ -40,11 +45,24 @@ export default function DeployDesk({
     setSavingConfig(false);
   }
 
+  async function handleRepoChange(repo: string) {
+    setGithubRepo(repo);
+    await fetch(`/api/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ github_repo: repo }),
+    });
+  }
+
   async function handleDeploy() {
     setDeploying(true);
     setError(null);
 
-    const res = await fetch(`/api/projects/${project.id}/deploy`, { method: "POST" });
+    const res = await fetch(`/api/projects/${project.id}/deploy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hostingIntegrationId: hostingIntegrationId || undefined }),
+    });
     const data = await res.json();
     setDeploying(false);
 
@@ -53,6 +71,7 @@ export default function DeployDesk({
       return;
     }
     setDeploys((prev) => [data.deploy, ...prev]);
+    setLastSynced(new Date().toISOString());
   }
 
   async function refreshDeploy(deployId: string) {
@@ -82,11 +101,18 @@ export default function DeployDesk({
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 px-6 py-8 text-neutral-100">
+      <SaveToGitHub
+        projectId={project.id}
+        githubRepo={githubRepo || null}
+        onRepoChange={handleRepoChange}
+      />
+
       <section>
         <h2 className="mb-1 text-lg font-semibold">Deploy Desk</h2>
         <p className="mb-4 text-sm text-neutral-500">
-          Push the current file tree to GitHub and track the resulting Vercel deploy. Add a
-          GitHub/Vercel token in Settings → Connections first.
+          Push the current file tree to GitHub and track the resulting deploy. Add a
+          GitHub/Vercel token in Settings → Connections first (or add hosting integrations
+          below for other targets).
         </p>
 
         <div className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
@@ -108,7 +134,27 @@ export default function DeployDesk({
               className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100 outline-none focus:border-neutral-500"
             />
           </label>
-          <div className="flex justify-end">
+          <label className="block text-xs text-neutral-500">
+            Deploy target
+            <select
+              value={hostingIntegrationId}
+              onChange={(e) => setHostingIntegrationId(e.target.value)}
+              className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
+            >
+              <option value="">Vercel (via GitHub integration, default)</option>
+              {hostingIntegrations.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-neutral-600">
+              {lastSynced
+                ? `Last synced to GitHub: ${new Date(lastSynced).toLocaleString()}`
+                : "Not synced to GitHub yet"}
+            </span>
             <button
               onClick={saveConfig}
               disabled={savingConfig}
@@ -143,8 +189,13 @@ export default function DeployDesk({
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[d.status]}`}
                   >
-                    {d.status}
+                    {d.hosting_integration_id && d.status === "ready" ? "triggered" : d.status}
                   </span>
+                  {d.hosting_integration_id && (
+                    <span className="text-[11px] text-neutral-600">
+                      check your host&apos;s dashboard
+                    </span>
+                  )}
                   {d.branch && (
                     <span className="text-xs text-neutral-500">
                       {d.branch}@{d.github_commit_sha?.slice(0, 7)}

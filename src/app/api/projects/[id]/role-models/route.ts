@@ -22,7 +22,9 @@ export async function GET(
   return NextResponse.json({ roleModels });
 }
 
-// Body: { role: Role, provider: ProviderName, model: string }
+const BUILT_IN_PROVIDERS = ["anthropic", "openai", "google"];
+
+// Body: { role: Role, provider: ProviderName | integration name, model: string }
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -40,8 +42,21 @@ export async function PUT(
   if (!ROLES.includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
-  if (!["anthropic", "openai", "google"].includes(provider)) {
+  if (typeof provider !== "string" || !provider.trim()) {
     return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
+  }
+  if (!BUILT_IN_PROVIDERS.includes(provider)) {
+    // Anything else must be a real ai_provider integration for this project.
+    const { data: integration } = await supabase
+      .from("integrations")
+      .select("id")
+      .eq("project_id", id)
+      .eq("type", "ai_provider")
+      .eq("name", provider)
+      .maybeSingle();
+    if (!integration) {
+      return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
+    }
   }
   if (typeof model !== "string" || !model.trim()) {
     return NextResponse.json({ error: "model is required" }, { status: 400 });

@@ -11,6 +11,8 @@ export interface Project {
   name: string;
   github_repo: string | null;
   vercel_project_id: string | null;
+  default_branch: string | null;
+  last_synced_to_github_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -83,8 +85,21 @@ export interface Deploy {
   branch: string | null;
   vercel_deployment_id: string | null;
   deployment_url: string | null;
+  hosting_integration_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type IntegrationType = "ai_provider" | "hosting";
+
+export interface Integration {
+  id: string;
+  project_id: string;
+  type: IntegrationType;
+  name: string;
+  base_url: string | null;
+  extra_config: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface Prompt {

@@ -57,6 +57,12 @@ export default async function ProjectPage({
     .eq("project_id", id)
     .order("created_at", { ascending: false });
 
+  const { data: integrations } = await supabase
+    .from("integrations")
+    .select("id, project_id, type, name, base_url, extra_config, created_at")
+    .eq("project_id", id)
+    .order("created_at", { ascending: true });
+
   const configuredProviders = (apiKeys ?? []).map((k) => k.provider);
 
   return (
@@ -74,6 +80,7 @@ export default async function ProjectPage({
         (p): p is "github" | "vercel" => p === "github" || p === "vercel"
       )}
       initialDeploys={deploys ?? []}
+      initialIntegrations={integrations ?? []}
     />
   );
 }
