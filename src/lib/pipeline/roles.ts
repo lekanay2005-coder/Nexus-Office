@@ -8,12 +8,14 @@ export const ROLE_LABELS: Record<Role, string> = {
   ops: "Ops",
 };
 
+// "Electric" per-role accents for the late-night command center theme —
+// kept in sync with the CSS custom properties in globals.css.
 export const ROLE_COLORS: Record<Role, string> = {
-  strategist: "#7c3aed", // violet
-  builder: "#2563eb", // blue
-  analyst: "#059669", // emerald
-  qa: "#d97706", // amber
-  ops: "#dc2626", // red
+  strategist: "#8b6bff", // electric violet
+  builder: "#2f9bff", // electric blue
+  analyst: "#17e0a6", // electric emerald
+  qa: "#ffb020", // electric amber
+  ops: "#ff4d6a", // electric red
 };
 
 export const ROLE_SYSTEM_PROMPTS: Record<Role, string> = {

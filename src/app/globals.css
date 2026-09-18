@@ -1,8 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* "late-night command center" theme — always dark, no light-mode branch */
+  --background: #0b0d12;
+  --foreground: #e7e9ee;
+  --panel-bg: rgba(255, 255, 255, 0.04);
+  --panel-border: rgba(255, 255, 255, 0.09);
+
+  --role-strategist: #8b6bff;
+  --role-builder: #2f9bff;
+  --role-analyst: #17e0a6;
+  --role-qa: #ffb020;
+  --role-ops: #ff4d6a;
 }
 
 @theme inline {
@@ -12,15 +21,54 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Glass panel: the base surface for cards, headers, and bars throughout
+   the app — subtle blur + hairline border instead of flat opaque fill. */
+.glass-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Pulsing glow ring around a role glyph while that role's call is in
+   flight — the "activate" moment in the relay handoff. */
+@keyframes role-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--glow-color) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--glow-color) 0%, transparent);
+  }
+}
+
+.role-glow {
+  animation: role-pulse 1.6s ease-in-out infinite;
+}
+
+/* Animated connector line between relay steps, drawn left-to-right as the
+   pipeline advances through the roles. */
+@keyframes relay-line-fill {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+.relay-line-active {
+  background: linear-gradient(
+    90deg,
+    var(--line-color, #8b6bff) 50%,
+    rgba(255, 255, 255, 0.12) 50%
+  );
+  background-size: 200% 100%;
+  animation: relay-line-fill 1.2s linear infinite;
 }

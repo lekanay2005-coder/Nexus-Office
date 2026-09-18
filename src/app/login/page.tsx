@@ -51,8 +51,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-8">
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="glass-panel w-full max-w-sm rounded-xl p-8">
         <h1 className="mb-1 text-xl font-semibold text-neutral-100">Nexus Office</h1>
         <p className="mb-6 text-sm text-neutral-400">
           {mode === "signin" ? "Sign in to your workspace" : "Create your account"}
@@ -79,7 +79,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+            className="w-full rounded-md bg-[var(--role-strategist)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             {mode === "signin" ? "Sign in" : "Sign up"}
           </button>

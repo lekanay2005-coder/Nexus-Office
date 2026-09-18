@@ -38,15 +38,15 @@ export default function OfficeWorkspace({
   const [canvasKey, setCanvasKey] = useState(0);
 
   return (
-    <div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
-      <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
+    <div className="flex h-screen flex-col text-neutral-100">
+      <header className="glass-panel flex items-center justify-between border-x-0 border-t-0 px-4 py-2">
         <div className="flex items-center gap-3">
           <Link href="/projects" className="text-sm text-neutral-500 hover:text-neutral-300">
             ← Projects
           </Link>
           <h1 className="text-sm font-semibold">{project.name}</h1>
         </div>
-        <nav className="flex gap-1 rounded-md bg-neutral-900 p-1">
+        <nav className="flex gap-1 rounded-md bg-white/5 p-1">
           <TabButton active={tab === "chat"} onClick={() => setTab("chat")}>
             Office Chat
           </TabButton>
@@ -120,8 +120,8 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded px-3 py-1 text-xs font-medium ${
-        active ? "bg-violet-600 text-white" : "text-neutral-400 hover:text-neutral-200"
+      className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+        active ? "bg-[var(--role-strategist)] text-white" : "text-neutral-400 hover:text-neutral-200"
       }`}
     >
       {children}

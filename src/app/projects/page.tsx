@@ -17,7 +17,7 @@ export default async function ProjectsPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <div className="min-h-screen bg-neutral-950 px-6 py-10 text-neutral-100">
+    <div className="min-h-screen px-6 py-10 text-neutral-100">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Your Projects</h1>
@@ -38,7 +38,7 @@ export default async function ProjectsPage() {
             <li key={p.id}>
               <Link
                 href={`/projects/${p.id}`}
-                className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-neutral-600"
+                className="glass-panel block rounded-lg px-4 py-3 hover:border-white/20"
               >
                 <div className="font-medium">{p.name}</div>
                 <div className="text-xs text-neutral-500">

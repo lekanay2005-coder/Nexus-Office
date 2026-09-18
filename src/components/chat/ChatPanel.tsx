@@ -2,8 +2,12 @@
 
 import { useRef, useState } from "react";
 import RoleMessage from "./RoleMessage";
-import type { PipelineStep } from "@/types/db";
-import { stripMemoryBlock, stripStrategistBlock } from "@/lib/pipeline/memory";
+import RelayTrack from "./RelayTrack";
+import type { PipelineStep, Role } from "@/types/db";
+import { stripMemoryBlock, stripStrategistBlock, parseStrategistOutput } from "@/lib/pipeline/memory";
+
+const SHORT_SEQUENCE: Role[] = ["strategist", "ops"];
+const FULL_SEQUENCE: Role[] = ["strategist", "builder", "analyst", "qa", "ops"];
 
 export interface RunWithSteps {
   id: string;
@@ -13,6 +17,9 @@ export interface RunWithSteps {
   error: string | null;
   created_at: string;
   pipeline_steps: PipelineStep[];
+  // Client-only: the full role sequence this run will follow, known once
+  // the Strategist's step arrives (drives the RelayTrack visualization).
+  relaySequence?: Role[];
 }
 
 export default function ChatPanel({
@@ -51,6 +58,7 @@ export default function ChatPanel({
         error: null,
         created_at: new Date().toISOString(),
         pipeline_steps: [],
+        relaySequence: SHORT_SEQUENCE,
       },
     ]);
 
@@ -118,9 +126,22 @@ export default function ChatPanel({
               created_at: new Date().toISOString(),
             };
 
+            const relaySequence =
+              step.role === "strategist"
+                ? parseStrategistOutput(step.output ?? "").needsFullPipeline
+                  ? FULL_SEQUENCE
+                  : SHORT_SEQUENCE
+                : undefined;
+
             setRuns((prev) =>
               prev.map((r) =>
-                r.id === currentRunId ? { ...r, pipeline_steps: [...r.pipeline_steps, step] } : r
+                r.id === currentRunId
+                  ? {
+                      ...r,
+                      pipeline_steps: [...r.pipeline_steps, step],
+                      relaySequence: relaySequence ?? r.relaySequence,
+                    }
+                  : r
               )
             );
             setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -164,10 +185,14 @@ export default function ChatPanel({
               </div>
             </div>
 
-            {run.status === "running" && (
-              <p className="pl-11 text-xs text-neutral-500 animate-pulse">
-                Pipeline running…
-              </p>
+            {run.status !== "error" && (
+              <div className="pl-11">
+                <RelayTrack
+                  sequence={run.relaySequence ?? SHORT_SEQUENCE}
+                  completedCount={run.pipeline_steps.length}
+                  running={run.status === "running"}
+                />
+              </div>
             )}
 
             {run.status === "error" && (
@@ -191,7 +216,7 @@ export default function ChatPanel({
 
       {error && <p className="px-4 pb-1 text-xs text-red-400">{error}</p>}
 
-      <form onSubmit={handleSubmit} className="flex gap-2 border-t border-neutral-800 p-3">
+      <form onSubmit={handleSubmit} className="glass-panel flex gap-2 border-x-0 border-b-0 p-3">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}

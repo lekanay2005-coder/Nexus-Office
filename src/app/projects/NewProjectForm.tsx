@@ -43,7 +43,7 @@ export default function NewProjectForm() {
       <button
         type="submit"
         disabled={loading}
-        className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+        className="rounded-md bg-[var(--role-strategist)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
       >
         {loading ? "Creating…" : "Create"}
       </button>
