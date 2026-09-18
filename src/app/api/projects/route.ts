@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_PROVIDER_CONFIG } from "@/lib/providers";
+import { ROLES } from "@/types/db";
 
 export async function GET() {
   const supabase = await createClient();
@@ -39,6 +41,19 @@ export async function POST(req: Request) {
   // Seed the persistent memory row immediately so the Memory Board has
   // something to show even before the first pipeline run.
   await supabase.from("project_memory").insert({ project_id: project.id });
+
+  // Seed explicit role_models rows using the default provider so the
+  // Settings UI shows what will actually run (and this stays correct if
+  // DEFAULT_PROVIDER_CONFIG ever changes after other projects already
+  // have their own saved rows).
+  await supabase.from("role_models").insert(
+    ROLES.map((role) => ({
+      project_id: project.id,
+      role,
+      provider: DEFAULT_PROVIDER_CONFIG.provider,
+      model: DEFAULT_PROVIDER_CONFIG.model,
+    }))
+  );
 
   return NextResponse.json({ project }, { status: 201 });
 }

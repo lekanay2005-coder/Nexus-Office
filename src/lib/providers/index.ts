@@ -20,11 +20,12 @@ export interface ProviderConfig {
   apiKey?: string;
 }
 
-// MVP default: every role runs on Claude. The Model Router (v2) will let
-// the user override this per-role via the role_models table.
+// Default provider/model for any role without an explicit role_models row.
+// Set to whichever provider actually has a server-side API key configured;
+// the Model Router lets the user override this per-role per-project.
 export const DEFAULT_PROVIDER_CONFIG: ProviderConfig = {
-  provider: "anthropic",
-  model: "claude-sonnet-4-5-20250929",
+  provider: "google",
+  model: "gemini-3.6-flash",
 };
 
 // Local/dev escape hatch: set NEXUS_MOCK_LLM=1 to run the full pipeline

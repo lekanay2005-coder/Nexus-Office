@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ROLES, type Role } from "@/types/db";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/pipeline/roles";
 import { MODEL_CATALOG, PROVIDER_LABELS } from "@/lib/providers/catalog";
-import type { ProviderName } from "@/lib/providers";
+import { DEFAULT_PROVIDER_CONFIG, type ProviderName } from "@/lib/providers";
 
 interface RoleModelRow {
   role: Role;
@@ -29,8 +29,8 @@ export default function ModelRouterPanel({
       const existing = initialRoleModels.find((r) => r.role === role);
       map[role] = existing ?? {
         role,
-        provider: "anthropic",
-        model: "claude-sonnet-4-5-20250929",
+        provider: DEFAULT_PROVIDER_CONFIG.provider,
+        model: DEFAULT_PROVIDER_CONFIG.model,
       };
     }
     return map;
