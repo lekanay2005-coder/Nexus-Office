@@ -15,8 +15,8 @@ export const MODEL_CATALOG: ModelOption[] = [
   { provider: "openai", model: "gpt-5", label: "GPT-5" },
   { provider: "openai", model: "gpt-5-mini", label: "GPT-5 Mini" },
   { provider: "openai", model: "gpt-4o", label: "GPT-4o" },
-  { provider: "google", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  { provider: "google", model: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { provider: "google", model: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview)" },
+  { provider: "google", model: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
 ];
 
 export const PROVIDER_LABELS: Record<ProviderName, string> = {
@@ -35,8 +35,8 @@ export const MODEL_PRICING: Record<string, { inputPer1M: number; outputPer1M: nu
   "gpt-5": { inputPer1M: 5, outputPer1M: 15 },
   "gpt-5-mini": { inputPer1M: 0.25, outputPer1M: 2 },
   "gpt-4o": { inputPer1M: 2.5, outputPer1M: 10 },
-  "gemini-2.5-pro": { inputPer1M: 1.25, outputPer1M: 10 },
-  "gemini-2.5-flash": { inputPer1M: 0.3, outputPer1M: 2.5 },
+  // Google's 3.x line is new enough that list pricing isn't in here yet —
+  // the Cost Meter falls back to showing raw token counts for these.
 };
 
 export function estimateCostUsd(model: string, tokensIn: number, tokensOut: number): number | null {
