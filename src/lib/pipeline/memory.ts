@@ -48,3 +48,33 @@ export function extractMemoryUpdate(opsOutput: string): MemoryUpdate | null {
 export function stripMemoryBlock(opsOutput: string): string {
   return opsOutput.replace(MEMORY_BLOCK_RE, "").trim();
 }
+
+export interface StrategistDecision {
+  needsFullPipeline: boolean;
+  direction: string;
+}
+
+const STRATEGIST_BLOCK_RE = /```strategist\s*([\s\S]*?)```/;
+
+// Falls back to treating the whole reply as "needs full pipeline" if the
+// model didn't emit a parseable block, so a malformed response degrades to
+// the safer (more thorough) path rather than silently short-circuiting.
+export function parseStrategistOutput(strategistOutput: string): StrategistDecision {
+  const match = strategistOutput.match(STRATEGIST_BLOCK_RE);
+  if (!match) {
+    return { needsFullPipeline: true, direction: strategistOutput.trim() };
+  }
+  try {
+    const parsed = JSON.parse(match[1].trim());
+    return {
+      needsFullPipeline: Boolean(parsed.needs_full_pipeline),
+      direction: typeof parsed.direction === "string" ? parsed.direction : strategistOutput.trim(),
+    };
+  } catch {
+    return { needsFullPipeline: true, direction: strategistOutput.trim() };
+  }
+}
+
+export function stripStrategistBlock(strategistOutput: string): string {
+  return strategistOutput.replace(STRATEGIST_BLOCK_RE, "").trim();
+}

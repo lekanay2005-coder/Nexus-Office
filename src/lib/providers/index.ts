@@ -78,9 +78,20 @@ function mockResponseFor(system: string, prompt: string): string {
     const isBuildRequest = BUILD_KEYWORDS.some((kw) => userMessage.includes(kw));
 
     if (!isBuildRequest) {
-      return `ROUTE: DIRECT\n[mock] Here's a direct answer to: "${userMessage.trim()}". (This is a mocked Strategist response — no build work needed.)`;
+      const direction = `Here's a direct answer to: "${userMessage.trim()}". (This is a mocked Strategist response — no build work needed.)`;
+      return `[mock] No build work needed for this one.\n\n\`\`\`strategist\n${JSON.stringify(
+        { needs_full_pipeline: false, direction },
+        null,
+        2
+      )}\n\`\`\``;
     }
-    return `ROUTE: PIPELINE\n[mock] Plan: build a simple static landing page per the user's request. Builder should create an index.html with a heading and a short paragraph.`;
+    const direction =
+      "Build a simple static landing page per the user's request. Builder should create an index.html with a heading and a short paragraph.";
+    return `[mock] This needs real work — routing to the full pipeline.\n\n\`\`\`strategist\n${JSON.stringify(
+      { needs_full_pipeline: true, direction },
+      null,
+      2
+    )}\n\`\`\``;
   }
 
   if (system.includes("You are the Builder")) {
@@ -96,7 +107,11 @@ function mockResponseFor(system: string, prompt: string): string {
   }
 
   if (system.includes("You are Ops")) {
-    return `[mock] Summary: built a static landing page with a heading and paragraph; Analyst flagged a missing viewport tag; QA suggested manual + lint checks.\n\n\`\`\`memory-update\n{\n  "decisions": ["Built an initial static landing page (index.html) per user request"],\n  "open_issues": ["Add a viewport meta tag to index.html"],\n  "tech_stack": ["Static HTML"]\n}\n\`\`\``;
+    if (prompt.includes("BUILDER OUTPUT:")) {
+      return `[mock] Built a static landing page with a heading and paragraph; Analyst flagged a missing viewport tag; QA suggested manual + lint checks.\n\n\`\`\`memory-update\n{\n  "decisions": ["Built an initial static landing page (index.html) per user request"],\n  "open_issues": ["Add a viewport meta tag to index.html"],\n  "tech_stack": ["Static HTML"]\n}\n\`\`\``;
+    }
+    const direction = prompt.match(/STRATEGIST DIRECTION:\n([\s\S]*?)(?:\n\n---|$)/)?.[1]?.trim();
+    return `[mock] ${direction ?? "Here's the answer to your question."}`;
   }
 
   return "[mock] No matching role prompt detected.";

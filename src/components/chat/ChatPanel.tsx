@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import RoleMessage from "./RoleMessage";
 import type { PipelineStep } from "@/types/db";
+import { stripMemoryBlock, stripStrategistBlock } from "@/lib/pipeline/memory";
 
 export interface RunWithSteps {
   id: string;
@@ -53,43 +54,91 @@ export default function ChatPanel({
       },
     ]);
 
+    let sawFullPipeline = false;
+    let stepCounter = 0;
+
+    function retitleRun(realId: string) {
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === tempId
+            ? { ...r, id: realId, pipeline_steps: r.pipeline_steps.map((s) => ({ ...s, run_id: realId })) }
+            : r
+        )
+      );
+    }
+
     try {
       const res = await fetch("/api/pipeline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId, message }),
       });
-      const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error ?? "Pipeline failed");
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Pipeline failed");
+      }
 
-      const steps: PipelineStep[] = data.steps.map((s: PipelineStep) => ({
-        ...s,
-        run_id: data.runId,
-      }));
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let currentRunId = tempId;
 
-      setRuns((prev) =>
-        prev.map((r) =>
-          r.id === tempId
-            ? {
-                id: data.runId,
-                user_message: message,
-                mode: data.mode,
-                status: "complete",
-                error: null,
-                created_at: new Date().toISOString(),
-                pipeline_steps: steps,
-              }
-            : r
-        )
-      );
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      if (data.mode === "pipeline") onFilesChanged?.();
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+
+        for (const raw of events) {
+          const line = raw.trim();
+          if (!line.startsWith("data:")) continue;
+          const event = JSON.parse(line.slice(5).trim());
+
+          if (event.type === "step") {
+            if (currentRunId === tempId) {
+              currentRunId = event.step.runId;
+              retitleRun(currentRunId);
+            }
+            if (event.step.role === "builder") sawFullPipeline = true;
+
+            const step: PipelineStep = {
+              id: `${currentRunId}-${stepCounter++}`,
+              run_id: currentRunId,
+              role: event.step.role,
+              step_order: event.step.stepOrder,
+              provider: event.step.provider,
+              model: event.step.model,
+              input: event.step.input,
+              output: event.step.output,
+              tokens_in: event.step.tokensIn,
+              tokens_out: event.step.tokensOut,
+              created_at: new Date().toISOString(),
+            };
+
+            setRuns((prev) =>
+              prev.map((r) =>
+                r.id === currentRunId ? { ...r, pipeline_steps: [...r.pipeline_steps, step] } : r
+              )
+            );
+            setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          } else if (event.type === "done") {
+            setRuns((prev) =>
+              prev.map((r) => (r.id === currentRunId ? { ...r, mode: event.mode, status: "complete" } : r))
+            );
+            if (sawFullPipeline) onFilesChanged?.();
+          } else if (event.type === "error") {
+            throw new Error(event.message);
+          }
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Pipeline failed";
       setError(msg);
       setRuns((prev) =>
-        prev.map((r) => (r.id === tempId ? { ...r, status: "error", error: msg } : r))
+        prev.map((r) => (r.id === tempId || r.status === "running" ? { ...r, status: "error", error: msg } : r))
       );
     } finally {
       setPending(false);
@@ -132,11 +181,7 @@ export default function ChatPanel({
                   key={step.id}
                   role={step.role}
                   model={step.model}
-                  content={
-                    step.role === "ops"
-                      ? stripMemoryBlockClient(step.output ?? "")
-                      : step.output ?? ""
-                  }
+                  content={displayContent(step)}
                 />
               ))}
           </div>
@@ -166,6 +211,9 @@ export default function ChatPanel({
   );
 }
 
-function stripMemoryBlockClient(text: string): string {
-  return text.replace(/```memory-update[\s\S]*?```/, "").trim();
+function displayContent(step: PipelineStep): string {
+  const text = step.output ?? "";
+  if (step.role === "strategist") return stripStrategistBlock(text);
+  if (step.role === "ops") return stripMemoryBlock(text);
+  return text;
 }

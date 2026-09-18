@@ -2,12 +2,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ROLES, type ProjectMemory, type Role } from "@/types/db";
 import { complete, DEFAULT_PROVIDER_CONFIG, type ProviderConfig, type ProviderName } from "@/lib/providers";
 import { ROLE_SYSTEM_PROMPTS } from "@/lib/pipeline/roles";
-import { formatMemoryForPrompt, extractMemoryUpdate, stripMemoryBlock } from "@/lib/pipeline/memory";
+import {
+  formatMemoryForPrompt,
+  extractMemoryUpdate,
+  stripMemoryBlock,
+  parseStrategistOutput,
+} from "@/lib/pipeline/memory";
 import { extractFilesFromBuilderOutput } from "@/lib/pipeline/extractFiles";
 import { decryptSecret } from "@/lib/crypto";
 import { randomUUID } from "crypto";
 
 export interface PipelineStepResult {
+  runId: string;
   role: Role;
   stepOrder: number;
   provider: string;
@@ -31,6 +37,10 @@ interface RunPipelineArgs {
   userId: string;
   userMessage: string;
   roleConfig?: Partial<Record<Role, ProviderConfig>>;
+  // Invoked immediately after each step is persisted, so a streaming caller
+  // (the API route) can push it to the client without waiting for the rest
+  // of the pipeline to finish.
+  onStep?: (step: PipelineStepResult) => void;
 }
 
 export async function runPipeline({
@@ -39,6 +49,7 @@ export async function runPipeline({
   userId,
   userMessage,
   roleConfig,
+  onStep,
 }: RunPipelineArgs): Promise<PipelineRunResult> {
   const memory = await loadMemory(supabase, projectId);
   const memoryText = formatMemoryForPrompt(memory);
@@ -85,28 +96,18 @@ export async function runPipeline({
       tokensOut: strategistResult.tokensOut,
     });
     steps.push(strategistStep);
+    onStep?.(strategistStep);
 
-    const { isDirect, body: strategistBody } = parseRoute(strategistResult.text);
+    const { needsFullPipeline, direction } = parseStrategistOutput(strategistResult.text);
+    const rolesToRun: Role[] = needsFullPipeline
+      ? ["builder", "analyst", "qa", "ops"]
+      : ["ops"];
 
-    if (isDirect) {
-      await supabase
-        .from("pipeline_runs")
-        .update({ mode: "direct", status: "complete", completed_at: new Date().toISOString() })
-        .eq("id", run.id);
-
-      return {
-        runId: run.id,
-        mode: "direct",
-        steps,
-        finalMessage: strategistBody,
-      };
-    }
-
-    // --- Steps 2-5: Builder -> Analyst -> QA -> Ops ---
-    const priorOutputs: Partial<Record<Role, string>> = { strategist: strategistBody };
+    // --- Remaining steps: either straight to Ops, or Builder -> Analyst -> QA -> Ops ---
+    const priorOutputs: Partial<Record<Role, string>> = { strategist: direction };
     let stepOrder = 2;
 
-    for (const role of ROLES.filter((r) => r !== "strategist")) {
+    for (const role of rolesToRun) {
       const config = effectiveRoleConfig[role] ?? DEFAULT_PROVIDER_CONFIG;
       const prompt = buildRolePrompt(memoryText, userMessage, priorOutputs);
 
@@ -126,6 +127,7 @@ export async function runPipeline({
         tokensOut: result.tokensOut,
       });
       steps.push(step);
+      onStep?.(step);
       priorOutputs[role] = result.text;
 
       // Builder output may contain files destined for the Code Canvas.
@@ -148,15 +150,18 @@ export async function runPipeline({
     const opsOutput = priorOutputs.ops ?? "";
     const memoryUpdate = extractMemoryUpdate(opsOutput);
     const finalMessage = stripMemoryBlock(opsOutput);
+    const mode = needsFullPipeline ? "pipeline" : "direct";
 
+    // Every run ends with Ops and updates memory before returning, whether
+    // it took the short path (Strategist -> Ops) or the full one.
     await applyMemoryUpdate(supabase, projectId, memory, memoryUpdate, run.id);
 
     await supabase
       .from("pipeline_runs")
-      .update({ mode: "pipeline", status: "complete", completed_at: new Date().toISOString() })
+      .update({ mode, status: "complete", completed_at: new Date().toISOString() })
       .eq("id", run.id);
 
-    return { runId: run.id, mode: "pipeline", steps, finalMessage };
+    return { runId: run.id, mode, steps, finalMessage };
   } catch (err) {
     await supabase
       .from("pipeline_runs")
@@ -235,17 +240,6 @@ async function loadMemory(supabase: SupabaseClient, projectId: string): Promise<
   return created as ProjectMemory;
 }
 
-function parseRoute(strategistText: string): { isDirect: boolean; body: string } {
-  const lines = strategistText.split("\n");
-  const firstLine = lines[0]?.trim().toUpperCase() ?? "";
-  const rest = lines.slice(1).join("\n").trim();
-
-  if (firstLine.includes("ROUTE: DIRECT") || firstLine.includes("ROUTE:DIRECT")) {
-    return { isDirect: true, body: rest || strategistText };
-  }
-  return { isDirect: false, body: rest || strategistText };
-}
-
 function buildRolePrompt(
   memoryText: string,
   userMessage: string,
@@ -253,7 +247,9 @@ function buildRolePrompt(
 ): string {
   const sections = [memoryText, `USER MESSAGE:\n${userMessage}`];
 
-  if (priorOutputs.strategist) sections.push(`STRATEGIST PLAN:\n${priorOutputs.strategist}`);
+  if (priorOutputs.strategist) {
+    sections.push(`STRATEGIST DIRECTION:\n${priorOutputs.strategist}`);
+  }
   if (priorOutputs.builder) sections.push(`BUILDER OUTPUT:\n${priorOutputs.builder}`);
   if (priorOutputs.analyst) sections.push(`ANALYST REVIEW:\n${priorOutputs.analyst}`);
   if (priorOutputs.qa) sections.push(`QA NOTES:\n${priorOutputs.qa}`);
@@ -289,7 +285,7 @@ async function persistStep(
 
   if (error) throw new Error(`Failed to persist step ${step.role}: ${error.message}`);
 
-  return step;
+  return { ...step, runId };
 }
 
 async function applyMemoryUpdate(
