@@ -2,8 +2,16 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import NewProjectForm from "./NewProjectForm";
+import SetupRequired from "@/components/SetupRequired";
 
 export default async function ProjectsPage() {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    return <SetupRequired />;
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

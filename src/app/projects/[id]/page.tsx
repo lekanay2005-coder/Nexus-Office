@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import OfficeWorkspace from "./OfficeWorkspace";
+import SetupRequired from "@/components/SetupRequired";
 
 export default async function ProjectPage({
   params,
@@ -8,6 +9,14 @@ export default async function ProjectPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    return <SetupRequired />;
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
