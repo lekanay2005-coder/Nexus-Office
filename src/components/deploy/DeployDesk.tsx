@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import SaveToGitHub from "./SaveToGitHub";
+import { useApprovalFlow } from "@/components/common/ApprovalDialog";
 import type { Deploy, DeployStatus, Integration, Project } from "@/types/db";
 
 const STATUS_STYLES: Record<DeployStatus, string> = {
@@ -29,6 +30,10 @@ export default function DeployDesk({
   const [error, setError] = useState<string | null>(null);
   const [lastSynced, setLastSynced] = useState(project.last_synced_to_github_at);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Approval-gated production deploys (Addendum 3): a 409 APPROVAL_REQUIRED
+  // response raises the confirm dialog and retries with confirmed=true.
+  const { fetchWithApproval, dialogEl } = useApprovalFlow(project.id);
 
   async function saveConfig() {
     setSavingConfig(true);
@@ -58,19 +63,19 @@ export default function DeployDesk({
     setDeploying(true);
     setError(null);
 
-    const res = await fetch(`/api/projects/${project.id}/deploy`, {
+    const { res, data } = await fetchWithApproval(`/api/projects/${project.id}/deploy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ hostingIntegrationId: hostingIntegrationId || undefined }),
     });
-    const data = await res.json();
     setDeploying(false);
 
+    if (data.cancelled) return;
     if (!res.ok) {
-      setError(data.error ?? "Deploy failed");
+      setError((data.error as string) ?? "Deploy failed");
       return;
     }
-    setDeploys((prev) => [data.deploy, ...prev]);
+    setDeploys((prev) => [data.deploy as Deploy, ...prev]);
     setLastSynced(new Date().toISOString());
   }
 
@@ -101,6 +106,7 @@ export default function DeployDesk({
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 px-6 py-8 text-neutral-100">
+      {dialogEl}
       <SaveToGitHub
         projectId={project.id}
         githubRepo={githubRepo || null}

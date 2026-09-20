@@ -27,6 +27,7 @@ import {
   getCost,
 } from "./api.js";
 import { showToast } from "./toast.js";
+import { runWithApproval } from "./confirm.js";
 import { el } from "./util.js";
 
 const BUILT_INS = ["anthropic", "openai", "google"];
@@ -407,14 +408,24 @@ export async function renderIntegrations(inner, projectId) {
         class: "btn small danger",
         text: "Delete",
         onclick: async () => {
+          deleteBtn.disabled = true;
           try {
-            await deleteIntegration(projectId, integration.id);
+            // Approval-gated: server returns 409 + summary when the project
+            // requires approval; modal confirms before the delete retries.
+            const result = await runWithApproval(projectId, (confirmed) =>
+              deleteIntegration(projectId, integration.id, confirmed)
+            );
+            if (result === null) {
+              showToast("Deletion cancelled", "info");
+              return;
+            }
             integrations = integrations.filter((i) => i.id !== integration.id);
             paintGrid();
             showToast(`Integration "${integration.name}" deleted`, "success");
           } catch (err) {
             showToast(err.message, "error");
           }
+          deleteBtn.disabled = false;
         },
       });
       card.append(el("div", { style: "display:flex;gap:6px;margin-top:2px;" }, testRow));

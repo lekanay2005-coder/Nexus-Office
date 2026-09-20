@@ -13,6 +13,8 @@ import {
   renderMemory,
   renderCost,
 } from "./settings.js";
+import { renderAudit } from "./audit.js";
+import { renderPermissions } from "./permissions.js";
 import { renderDeployDesk } from "./deploy.js";
 import { showToast } from "./toast.js";
 import { debounce } from "./util.js";
@@ -317,6 +319,8 @@ async function renderWorkspace(projectId) {
     ["desk", "Deploy"],
     ["memory", "Memory"],
     ["cost", "Cost"],
+    ["audit", "Audit"],
+    ["permissions", "Permissions"],
     ["settings", "Settings"],
   ];
   const tabs = document.createElement("nav");
@@ -379,6 +383,8 @@ async function renderWorkspace(projectId) {
     if (page === "desk") await renderDeployDesk(inner, projectId);
     if (page === "memory") await renderMemory(inner, projectId);
     if (page === "cost") await renderCost(inner, projectId);
+    if (page === "audit") await renderAudit(inner, projectId);
+    if (page === "permissions") await renderPermissions(inner, projectId);
     if (page === "settings") await renderSettingsPage(inner, projectId);
   }
 
@@ -485,11 +491,30 @@ async function route() {
   location.hash = "#/projects";
 }
 
-// ---------- Settings page (Model Router + Keys + Integrations) ----------
+// ---------- Settings page (Model Router + Keys + Integrations + governance) ----------
 async function renderSettingsPage(inner, projectId) {
   const sections = document.createElement("div");
   sections.style.cssText = "display:flex;flex-direction:column;gap:34px;";
   inner.append(sections);
+
+  // Governance quick links (Addendum 3).
+  const gov = document.createElement("section");
+  gov.className = "glass";
+  gov.style.cssText = "padding:16px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;";
+  const govLabel = document.createElement("span");
+  govLabel.className = "section-title";
+  govLabel.style.cssText = "margin:0;font-size:14px;";
+  govLabel.textContent = "Governance";
+  const auditLink = document.createElement("a");
+  auditLink.className = "btn small";
+  auditLink.href = `#/project/${projectId}/audit`;
+  auditLink.textContent = "Audit log";
+  const permsLink = document.createElement("a");
+  permsLink.className = "btn small";
+  permsLink.href = `#/project/${projectId}/permissions`;
+  permsLink.textContent = "Role permissions & approvals";
+  gov.append(govLabel, auditLink, permsLink);
+  sections.append(gov);
 
   const routerSection = document.createElement("section");
   const keysSection = document.createElement("section");

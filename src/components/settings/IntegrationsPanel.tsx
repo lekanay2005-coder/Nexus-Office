@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useApprovalFlow } from "@/components/common/ApprovalDialog";
 import type { Integration, IntegrationType } from "@/types/db";
 
 const BASE_URL_PRESETS: { label: string; url: string; type: IntegrationType }[] = [
@@ -24,6 +25,10 @@ export default function IntegrationsPanel({
   );
   const [testing, setTesting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Deleting an integration is a risky production action (Addendum 3): a
+  // 409 APPROVAL_REQUIRED response raises the confirm dialog first.
+  const { fetchWithApproval, dialogEl } = useApprovalFlow(projectId);
 
   async function handleAdd(data: {
     type: IntegrationType;
@@ -64,9 +69,11 @@ export default function IntegrationsPanel({
   }
 
   async function handleDelete(integrationId: string) {
-    const res = await fetch(`/api/projects/${projectId}/integrations/${integrationId}`, {
-      method: "DELETE",
-    });
+    const { res, data } = await fetchWithApproval(
+      `/api/projects/${projectId}/integrations/${integrationId}`,
+      { method: "DELETE" }
+    );
+    if (data.cancelled) return;
     if (res.ok) setIntegrations((prev) => prev.filter((i) => i.id !== integrationId));
   }
 
@@ -82,6 +89,7 @@ export default function IntegrationsPanel({
 
   return (
     <section>
+      {dialogEl}
       <div className="mb-1 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Integrations</h2>
         <button

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useApprovalFlow } from "@/components/common/ApprovalDialog";
 import type { SyncConflict } from "@/lib/deploy/githubSync";
 
 interface RepoSummary {
@@ -40,6 +41,10 @@ export default function SaveToGitHub({
   const [resolutions, setResolutions] = useState<Record<string, "mine" | "theirs">>({});
   const [diffOpen, setDiffOpen] = useState<string | null>(null);
 
+  // Approval-gated GitHub commits (Addendum 3): a 409 APPROVAL_REQUIRED
+  // response raises the confirm dialog and retries with confirmed=true.
+  const { fetchWithApproval, dialogEl } = useApprovalFlow(projectId);
+
   async function loadRepos() {
     setReposLoading(true);
     const res = await fetch(`/api/projects/${projectId}/github/repos`);
@@ -77,26 +82,29 @@ export default function SaveToGitHub({
     setSaving(true);
     setStatus({ kind: "idle" });
 
-    const res = await fetch(`/api/projects/${projectId}/github/sync`, {
+    const { res, data } = await fetchWithApproval(`/api/projects/${projectId}/github/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ resolutions: withResolutions ?? {} }),
     });
-    const data = await res.json();
     setSaving(false);
 
+    if (data.cancelled) {
+      setStatus({ kind: "idle" });
+      return;
+    }
     if (!res.ok) {
       if (data.error === "RECONNECT_GITHUB") setStatus({ kind: "reconnect" });
-      else setStatus({ kind: "error", message: data.error ?? "Save failed" });
+      else setStatus({ kind: "error", message: (data.error as string) ?? "Save failed" });
       return;
     }
 
     if (data.status === "conflicts") {
-      setStatus({ kind: "conflicts", conflicts: data.conflicts });
+      setStatus({ kind: "conflicts", conflicts: data.conflicts as SyncConflict[] });
       return;
     }
 
-    setStatus({ kind: "success", url: data.url });
+    setStatus({ kind: "success", url: data.url as string });
     setResolutions({});
   }
 
@@ -120,6 +128,7 @@ export default function SaveToGitHub({
 
   return (
     <section>
+      {dialogEl}
       <h2 className="mb-1 text-lg font-semibold">Save to GitHub</h2>
       <p className="mb-4 text-sm text-neutral-500">
         Push the project&apos;s files to a connected repo as a single commit, with automatic

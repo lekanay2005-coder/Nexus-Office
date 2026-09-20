@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptSecret } from "@/lib/crypto";
+import { setIntegrationApiKey } from "@/lib/secrets";
+import { logAudit } from "@/lib/audit";
 
 const SELECT_COLUMNS = "id, project_id, type, name, base_url, extra_config, created_at";
 
@@ -55,6 +57,9 @@ export async function POST(
     return NextResponse.json({ error: "api_key is required" }, { status: 400 });
   }
 
+  // The key lives in the shared secrets vault (AES-256-GCM at rest). The
+  // legacy api_key_encrypted column is still mirrored so any reader that
+  // hasn't moved to the vault keeps working during the transition.
   let encrypted: string | null = null;
   if (apiKey) {
     try {
@@ -84,5 +89,23 @@ export async function POST(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (apiKey) {
+    try {
+      await setIntegrationApiKey(supabase, id, name, apiKey);
+    } catch {
+      // Non-fatal: the mirrored legacy column still holds the key.
+    }
+  }
+
+  await logAudit(supabase, {
+    projectId: id,
+    userId: user.id,
+    actor: "user",
+    action: "integration.save",
+    target: name,
+    metadata: { type, hasKey: Boolean(apiKey), baseUrl },
+  });
+
   return NextResponse.json({ integration }, { status: 201 });
 }

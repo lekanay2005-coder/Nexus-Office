@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptSecret } from "@/lib/crypto";
+import { setUserProviderKey } from "@/lib/secrets";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -19,6 +20,9 @@ export async function GET(request: Request) {
     const providerToken = data.session?.provider_token;
     if (providerToken && data.user) {
       try {
+        // Secrets vault is the source of truth for the token now.
+        await setUserProviderKey(supabase, data.user.id, "github", providerToken);
+        // Legacy mirror keeps pre-vault readers working during transition.
         await supabase.from("api_keys").upsert(
           {
             user_id: data.user.id,

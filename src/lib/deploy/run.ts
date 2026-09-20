@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { pushFilesToGitHub } from "./github";
 import { getLatestDeployment, mapVercelStateToDeployStatus } from "./vercel";
 import { getDecryptedApiKey } from "@/lib/apiKeys";
-import { decryptSecret } from "@/lib/crypto";
+import { getIntegrationApiKey } from "@/lib/secrets";
 
 // Local/dev escape hatch mirroring NEXUS_MOCK_LLM: set NEXUS_MOCK_DEPLOY=1
 // to exercise the full Deploy Desk flow (push -> deploy row -> status
@@ -112,12 +112,14 @@ export async function startDeploy({
 
     if (integration?.base_url) {
       const headers: Record<string, string> = {};
-      if (integration.api_key_encrypted) {
-        try {
-          headers.Authorization = `Bearer ${decryptSecret(integration.api_key_encrypted)}`;
-        } catch {
-          // Trigger without auth rather than fail the whole deploy.
-        }
+      if (integration.api_key_encrypted || integration.name) {
+        const key = await getIntegrationApiKey(
+          supabase,
+          projectId,
+          integration.name,
+          integration.api_key_encrypted
+        );
+        if (key) headers.Authorization = `Bearer ${key}`;
       }
       try {
         const res = await fetch(integration.base_url, { method: "POST", headers });

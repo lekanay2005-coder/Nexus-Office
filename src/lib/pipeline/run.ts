@@ -10,6 +10,9 @@ import {
 } from "@/lib/pipeline/memory";
 import { extractFilesFromBuilderOutput } from "@/lib/pipeline/extractFiles";
 import { decryptSecret } from "@/lib/crypto";
+import { logAudit } from "@/lib/audit";
+import { assertRoleAllowed } from "@/lib/capabilities";
+import { getIntegrationApiKey } from "@/lib/secrets";
 import { randomUUID } from "crypto";
 
 export interface PipelineStepResult {
@@ -74,6 +77,15 @@ export async function runPipeline({
     throw new Error(`Failed to create pipeline run: ${runError?.message}`);
   }
 
+  await logAudit(supabase, {
+    projectId,
+    userId,
+    actor: "user",
+    action: "pipeline.start",
+    target: run.id,
+    metadata: { message: userMessage.slice(0, 280) },
+  });
+
   const steps: PipelineStepResult[] = [];
 
   try {
@@ -97,6 +109,19 @@ export async function runPipeline({
     });
     steps.push(strategistStep);
     onStep?.(strategistStep);
+    await logAudit(supabase, {
+      projectId,
+      userId,
+      actor: "strategist",
+      action: "pipeline.step",
+      target: run.id,
+      metadata: {
+        provider: strategistStep.provider,
+        model: strategistStep.model,
+        tokensIn: strategistStep.tokensIn,
+        tokensOut: strategistStep.tokensOut,
+      },
+    });
 
     const { needsFullPipeline, direction } = parseStrategistOutput(strategistResult.text);
     const rolesToRun: Role[] = needsFullPipeline
@@ -128,21 +153,52 @@ export async function runPipeline({
       });
       steps.push(step);
       onStep?.(step);
+      await logAudit(supabase, {
+        projectId,
+        userId,
+        actor: role,
+        action: "pipeline.step",
+        target: run.id,
+        metadata: { provider: step.provider, model: step.model, tokensIn: step.tokensIn, tokensOut: step.tokensOut },
+      });
       priorOutputs[role] = result.text;
 
       // Builder output may contain files destined for the Code Canvas.
+      // Least-privilege: the write only happens if the Builder role still
+      // holds the write_files capability for this project.
       if (role === "builder") {
         const files = extractFilesFromBuilderOutput(result.text);
         if (files.length) {
-          await supabase.from("files").upsert(
-            files.map((f) => ({
-              project_id: projectId,
-              path: f.path,
-              content: f.content,
-              updated_at: new Date().toISOString(),
-            })),
-            { onConflict: "project_id,path" }
-          );
+          if (await assertRoleAllowed(supabase, projectId, "builder", "write_files")) {
+            await supabase.from("files").upsert(
+              files.map((f) => ({
+                project_id: projectId,
+                path: f.path,
+                content: f.content,
+                updated_at: new Date().toISOString(),
+              })),
+              { onConflict: "project_id,path" }
+            );
+            await logAudit(supabase, {
+              projectId,
+              userId,
+              actor: "builder",
+              action: "files.write",
+              target: run.id,
+              metadata: { paths: files.map((f) => f.path) },
+            });
+          } else {
+            // Permission denied — record it and skip the writes; the run
+            // itself continues so the rest of the pipeline still works.
+            await logAudit(supabase, {
+              projectId,
+              userId,
+              actor: "system",
+              action: "capability.denied",
+              target: "builder/write_files",
+              metadata: { runId: run.id, rejectedPaths: files.map((f) => f.path) },
+            });
+          }
         }
       }
     }
@@ -153,13 +209,34 @@ export async function runPipeline({
     const mode = needsFullPipeline ? "pipeline" : "direct";
 
     // Every run ends with Ops and updates memory before returning, whether
-    // it took the short path (Strategist -> Ops) or the full one.
-    await applyMemoryUpdate(supabase, projectId, memory, memoryUpdate, run.id);
+    // it took the short path (Strategist -> Ops) or the full one. Ops must
+    // still hold write_project_memory for the update to apply.
+    if (await assertRoleAllowed(supabase, projectId, "ops", "write_project_memory")) {
+      await applyMemoryUpdate(supabase, projectId, memory, memoryUpdate, run.id);
+    } else {
+      await logAudit(supabase, {
+        projectId,
+        userId,
+        actor: "system",
+        action: "capability.denied",
+        target: "ops/write_project_memory",
+        metadata: { runId: run.id },
+      });
+    }
 
     await supabase
       .from("pipeline_runs")
       .update({ mode, status: "complete", completed_at: new Date().toISOString() })
       .eq("id", run.id);
+
+    await logAudit(supabase, {
+      projectId,
+      userId,
+      actor: "system",
+      action: "pipeline.complete",
+      target: run.id,
+      metadata: { mode, steps: steps.length },
+    });
 
     return { runId: run.id, mode, steps, finalMessage };
   } catch (err) {
@@ -171,6 +248,15 @@ export async function runPipeline({
         completed_at: new Date().toISOString(),
       })
       .eq("id", run.id);
+
+    await logAudit(supabase, {
+      projectId,
+      userId,
+      actor: "system",
+      action: "pipeline.error",
+      target: run.id,
+      metadata: { error: err instanceof Error ? err.message : String(err) },
+    });
     throw err;
   }
 }
@@ -214,17 +300,12 @@ async function loadRoleConfig(
     const integration = integrationsByName.get(provider);
 
     if (integration) {
-      let apiKey: string | undefined;
-      try {
-        apiKey = decryptSecret(integration.api_key_encrypted);
-      } catch {
-        // Fall through with no key — the custom provider call will fail
-        // clearly rather than silently using a stale/undecryptable one.
-      }
+      // Vault first (legacy api_key_encrypted column is the migration fallback).
+      const apiKey = await getIntegrationApiKey(supabase, projectId, integration.name, integration.api_key_encrypted);
       config[role] = {
         provider,
         model: row?.model ?? DEFAULT_PROVIDER_CONFIG.model,
-        apiKey,
+        apiKey: apiKey ?? undefined,
         baseUrl: integration.base_url ?? undefined,
       };
       continue;

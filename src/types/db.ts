@@ -13,6 +13,9 @@ export interface Project {
   vercel_project_id: string | null;
   default_branch: string | null;
   last_synced_to_github_at: string | null;
+  // Addendum 3 approval-gating (migration 0006). Optional because the
+  // column may not exist yet in not-yet-migrated databases.
+  require_approval?: boolean;
   created_at: string;
   updated_at: string;
 }

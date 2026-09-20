@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(
   _req: Request,
@@ -53,5 +54,15 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logAudit(supabase, {
+    projectId: id,
+    userId: user.id,
+    actor: "user",
+    action: "memory.update",
+    target: null,
+    metadata: { fields: Object.keys(patch).filter((k) => k !== "updated_at") },
+  });
+
   return NextResponse.json({ memory });
 }

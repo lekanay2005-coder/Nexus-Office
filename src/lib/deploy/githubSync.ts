@@ -130,6 +130,7 @@ export interface ApplySyncResult {
   commitSha: string;
   branch: string;
   url: string;
+  filesPushed: number;
 }
 
 export async function applyGitHubSync({
@@ -215,10 +216,11 @@ export async function applyGitHubSync({
     })
     .eq("id", projectId);
 
-  return { commitSha, branch, url: `https://github.com/${project.github_repo}/commit/${commitSha}` };
+  return { commitSha, branch, url: `https://github.com/${project.github_repo}/commit/${commitSha}`, filesPushed: filesToPush.length };
 }
 
-async function buildCommitMessage(supabase: SupabaseClient, projectId: string): Promise<string> {
+// Exported for the approval-gating summary in the sync route.
+export async function buildCommitMessage(supabase: SupabaseClient, projectId: string): Promise<string> {
   const { data: memory } = await supabase
     .from("project_memory")
     .select("decisions")

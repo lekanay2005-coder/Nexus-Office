@@ -1,22 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { decryptSecret } from "@/lib/crypto";
+import { getUserProviderKey } from "@/lib/secrets";
 
+// Reads a user-scoped provider key (github, vercel, anthropic, …) through
+// the secrets vault. Legacy api_keys rows are transparently migrated into
+// the vault on first read (see lib/secrets).
 export async function getDecryptedApiKey(
   supabase: SupabaseClient,
   userId: string,
   provider: string
 ): Promise<string | null> {
-  const { data } = await supabase
-    .from("api_keys")
-    .select("encrypted_key")
-    .eq("user_id", userId)
-    .eq("provider", provider)
-    .maybeSingle();
-
-  if (!data) return null;
-  try {
-    return decryptSecret(data.encrypted_key);
-  } catch {
-    return null;
-  }
+  return getUserProviderKey(supabase, userId, provider);
 }

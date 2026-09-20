@@ -10,10 +10,12 @@ import IntegrationsPanel from "@/components/settings/IntegrationsPanel";
 import DeployDesk from "@/components/deploy/DeployDesk";
 import MemoryBoard from "@/components/memory/MemoryBoard";
 import CostMeter from "@/components/cost/CostMeter";
+import AuditLog from "@/components/governance/AuditLog";
+import PermissionsPanel from "@/components/governance/PermissionsPanel";
 import type { Deploy, Integration, Project, ProjectFile, ProjectMemory, Role } from "@/types/db";
 import type { ProviderName } from "@/lib/providers";
 
-type Tab = "chat" | "canvas" | "memory" | "settings" | "deploy" | "cost";
+type Tab = "chat" | "canvas" | "memory" | "settings" | "deploy" | "cost" | "audit" | "permissions";
 type ConnectionProvider = "github" | "vercel";
 
 export default function OfficeWorkspace({
@@ -65,6 +67,12 @@ export default function OfficeWorkspace({
           <TabButton active={tab === "cost"} onClick={() => setTab("cost")}>
             Cost Meter
           </TabButton>
+          <TabButton active={tab === "audit"} onClick={() => setTab("audit")}>
+            Audit
+          </TabButton>
+          <TabButton active={tab === "permissions"} onClick={() => setTab("permissions")}>
+            Permissions
+          </TabButton>
           <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>
             Settings
           </TabButton>
@@ -98,6 +106,8 @@ export default function OfficeWorkspace({
           />
         )}
         {tab === "cost" && <CostMeter projectId={project.id} />}
+        {tab === "audit" && <AuditLog projectId={project.id} />}
+        {tab === "permissions" && <PermissionsPanel projectId={project.id} />}
         {tab === "settings" && (
           <div className="space-y-10">
             <ModelRouterPanel

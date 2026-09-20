@@ -6,6 +6,16 @@ import { createClient } from "@/lib/supabase/client";
 import SetupRequired from "@/components/SetupRequired";
 
 export default function LoginPage() {
+  // All hooks run unconditionally on every render — the env-var gate below
+  // returns early but must never skip hook calls (Rules of Hooks).
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [status, setStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const router = useRouter();
+
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -13,15 +23,7 @@ export default function LoginPage() {
     return <SetupRequired />;
   }
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [status, setStatus] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState(false);
-
   const supabase = createClient();
-  const router = useRouter();
 
   async function handleGitHubSignIn() {
     setOauthLoading(true);

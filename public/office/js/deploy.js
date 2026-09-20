@@ -13,6 +13,7 @@ import {
   listIntegrations,
 } from "./api.js";
 import { showToast } from "./toast.js";
+import { runWithApproval } from "./confirm.js";
 import { el } from "./util.js";
 
 export async function renderDeployDesk(inner, projectId) {
@@ -165,7 +166,15 @@ export async function renderDeployDesk(inner, projectId) {
     saveGhBtn.textContent = "Saving…";
     ghStatus.textContent = "";
     try {
-      const data = await syncGithub(projectId, withResolutions ?? {});
+      // Approval-gated: the server answers 409 with a summary when the
+      // project requires approval; the modal shows it and retries confirmed.
+      const data = await runWithApproval(projectId, (confirmed) =>
+        syncGithub(projectId, withResolutions ?? {}, confirmed)
+      );
+      if (data === null) {
+        showToast("Save cancelled — nothing was pushed", "info");
+        return;
+      }
       if (data.status === "conflicts") {
         paintConflicts(data.conflicts ?? []);
         showToast("Both sides changed some files — pick a version for each", "info");
@@ -180,9 +189,14 @@ export async function renderDeployDesk(inner, projectId) {
       } else {
         ghStatus.append(el("p", { class: "error-text", text: err.message }));
       }
+    } finally {
+      if (!ghStatus.querySelector(".glass")) {
+        // Re-enable unless the conflict-resolution panel is active — it
+        // drives its own push and keeps Save disabled meanwhile.
+        saveGhBtn.disabled = false;
+        saveGhBtn.textContent = "Save to GitHub";
+      }
     }
-    saveGhBtn.disabled = false;
-    saveGhBtn.textContent = "Save to GitHub";
   }
 
   function paintConflicts(conflicts) {
@@ -317,7 +331,15 @@ export async function renderDeployDesk(inner, projectId) {
     deployBtn.disabled = true;
     deployBtn.textContent = "Deploying…";
     try {
-      const { deploy } = await startDeploy(projectId, targetSelect.value || undefined);
+      // Approval-gated deploy: modal summary → Approve retries confirmed.
+      const result = await runWithApproval(projectId, (confirmed) =>
+        startDeploy(projectId, targetSelect.value || undefined, confirmed)
+      );
+      if (result === null) {
+        showToast("Deploy cancelled", "info");
+        return;
+      }
+      const { deploy } = result;
       deploys = [deploy, ...deploys];
       project.last_synced_to_github_at = new Date().toISOString();
       paintLastSynced();
@@ -325,9 +347,10 @@ export async function renderDeployDesk(inner, projectId) {
       showToast("Deploy triggered", "success");
     } catch (err) {
       showToast(err.message, "error");
+    } finally {
+      deployBtn.disabled = false;
+      deployBtn.textContent = "Deploy Now";
     }
-    deployBtn.disabled = false;
-    deployBtn.textContent = "Deploy Now";
   });
 
   // ---------- Deploy history ----------
