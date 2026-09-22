@@ -31,8 +31,9 @@ function actorColor(actor: string): string {
   return ROLE_COLORS[actor] ?? "var(--role-strategist)";
 }
 
-function actorLabel(actor: string): string {
-  if (actor === "user" || actor === "system") return actor[0].toUpperCase() + actor.slice(1);
+function actorLabel(actor: string, displayName?: string): string {
+  // Addendum 9: user-triggered actions show the display name, not "User".
+  if (actor === "user" && displayName) return displayName;
   return actor[0].toUpperCase() + actor.slice(1);
 }
 
@@ -64,7 +65,13 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-export default function AuditLog({ projectId }: { projectId: string }) {
+export default function AuditLog({
+  projectId,
+  displayName,
+}: {
+  projectId: string;
+  displayName: string;
+}) {
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actor, setActor] = useState("");
@@ -132,7 +139,7 @@ export default function AuditLog({ projectId }: { projectId: string }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="text-xs font-semibold" style={{ color }}>
-              {actorLabel(event.actor)}
+              {actorLabel(event.actor, displayName)}
             </span>
             <span className="text-xs text-neutral-200">{formatAction(event.action)}</span>
             {event.target && (

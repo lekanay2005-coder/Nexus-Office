@@ -10,6 +10,8 @@ import IntegrationsPanel from "@/components/settings/IntegrationsPanel";
 import BrandingPanel from "@/components/settings/BrandingPanel";
 import UpgradeCard from "@/components/settings/UpgradeCard";
 import NexusLogo from "@/components/brand/NexusLogo";
+import AccountPanel from "@/components/settings/AccountPanel";
+import DisplayNamePrompt from "@/components/account/DisplayNamePrompt";
 import DeployDesk from "@/components/deploy/DeployDesk";
 import MemoryBoard from "@/components/memory/MemoryBoard";
 import CostMeter from "@/components/cost/CostMeter";
@@ -23,6 +25,7 @@ type ConnectionProvider = "github" | "vercel";
 
 export default function OfficeWorkspace({
   project,
+  displayName,
   initialRuns,
   initialFiles,
   initialMemory,
@@ -33,6 +36,7 @@ export default function OfficeWorkspace({
   initialIntegrations,
 }: {
   project: Project;
+  displayName: string;
   initialRuns: RunWithSteps[];
   initialFiles: ProjectFile[];
   initialMemory: ProjectMemory | null;
@@ -54,6 +58,9 @@ export default function OfficeWorkspace({
 
   return (
     <div className="flex h-screen flex-col text-neutral-100">
+      {/* Addendum 9: one-time "What should we call you?" prompt — shows until
+          a display name is saved (skipping defers it to the next visit). */}
+      {displayName === "" && <DisplayNamePrompt />}
       <header className="glass-panel flex items-center justify-between border-x-0 border-t-0 px-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <NexusLogo surface="nav" className="shrink-0" />
@@ -112,7 +119,11 @@ export default function OfficeWorkspace({
           />
         )}
         {tab === "memory" && (
-          <MemoryBoard projectId={project.id} initialMemory={initialMemory} />
+          <MemoryBoard
+            projectId={project.id}
+            initialMemory={initialMemory}
+            displayName={displayName}
+          />
         )}
         {tab === "deploy" && (
           <DeployDesk
@@ -122,10 +133,15 @@ export default function OfficeWorkspace({
           />
         )}
         {tab === "cost" && <CostMeter projectId={project.id} />}
-        {tab === "audit" && <AuditLog projectId={project.id} />}
+        {tab === "audit" && (
+          <AuditLog projectId={project.id} displayName={displayName} />
+        )}
         {tab === "permissions" && <PermissionsPanel projectId={project.id} />}
         {tab === "settings" && (
           <div className="space-y-10">
+            <div className="mx-auto max-w-2xl px-6 pt-8">
+              <AccountPanel />
+            </div>
             <div className="mx-auto max-w-2xl px-6 pt-8">
               <UpgradeCard isPro={projectState.is_pro} />
             </div>

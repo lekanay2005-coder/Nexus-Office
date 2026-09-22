@@ -13,9 +13,11 @@ function uid() {
 export default function MemoryBoard({
   projectId,
   initialMemory,
+  displayName,
 }: {
   projectId: string;
   initialMemory: ProjectMemory | null;
+  displayName: string;
 }) {
   const [techStack, setTechStack] = useState<string[]>(initialMemory?.tech_stack ?? []);
   const [decisions, setDecisions] = useState<Decision[]>(initialMemory?.decisions ?? []);
@@ -171,7 +173,15 @@ export default function MemoryBoard({
       </section>
 
       <section>
-        <h3 className="mb-2 text-sm font-semibold text-neutral-400">Decisions Log</h3>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-neutral-400">Decisions Log</h3>
+          {displayName && (
+            <span className="text-[11px] text-neutral-500">
+              Your picks are logged as{" "}
+              <span className="font-medium text-neutral-300">{displayName}</span>
+            </span>
+          )}
+        </div>
         <ul className="space-y-2">
           {sortedDecisions.map((d) => (
             <li

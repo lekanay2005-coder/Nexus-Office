@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getDecryptedApiKey } from "@/lib/apiKeys";
-import { listUserRepos, createUserRepo } from "@/lib/deploy/github";
+import { listOwnerRepos, listOwners, createUserRepo } from "@/lib/deploy/github";
 
-export async function GET() {
+// Addendum 9: supports ?owner=<login> — the personal login lists the user's
+// own repos, an org login lists that org's repos. No owner = all personal
+// repos (backward compatible with the pre-picker flow).
+export async function GET(req: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -16,7 +19,17 @@ export async function GET() {
   }
 
   try {
-    const repos = await listUserRepos(token);
+    const requested = new URL(req.url).searchParams.get("owner");
+    let repos;
+    if (requested) {
+      const owners = await listOwners(token);
+      const personalLogin = owners[0].login;
+      const owner = owners.some((o) => o.login === requested) ? requested : personalLogin;
+      repos = await listOwnerRepos(token, owner, personalLogin);
+    } else {
+      const owners = await listOwners(token);
+      repos = await listOwnerRepos(token, owners[0].login, owners[0].login);
+    }
     return NextResponse.json({ repos });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to list repos";
@@ -52,10 +65,16 @@ export async function POST(
   }
 
   try {
+    const owner = typeof body?.owner === "string" ? body.owner.trim() : "";
+    const owners = await listOwners(token);
+    const personalLogin = owners[0].login;
     const repo = await createUserRepo(token, name, isPrivate);
     const { data: project, error } = await supabase
       .from("projects")
       .update({
+        // A repo created via this legacy endpoint always lands on the
+        // personal account; the org picker route handles org repos.
+        github_owner: owner && owners.some((o) => o.login === owner) ? owner : personalLogin,
         github_repo: repo.fullName,
         default_branch: repo.defaultBranch,
         last_synced_commit_sha: null,

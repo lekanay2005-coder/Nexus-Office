@@ -49,7 +49,16 @@ export async function PATCH(
   if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const patch: Record<string, unknown> = {};
-  if (typeof body.github_repo === "string") patch.github_repo = body.github_repo.trim() || null;
+  if (typeof body.github_repo === "string") {
+    patch.github_repo = body.github_repo.trim() || null;
+    // Addendum 9: switching repos resets the 3-way sync base so the next
+    // push doesn't fabricate conflicts against the OLD repo's HEAD, and
+    // records the owner context from the owner/repo full name. Project
+    // history (memory, runs, deploys) is intentionally untouched.
+    patch.last_synced_commit_sha = null;
+    const trimmed = body.github_repo.trim();
+    if (trimmed.includes("/")) patch.github_owner = trimmed.split("/")[0];
+  }
   if (typeof body.vercel_project_id === "string") {
     patch.vercel_project_id = body.vercel_project_id.trim() || null;
   }

@@ -10,6 +10,22 @@ export interface PushResult {
   branch: string;
 }
 
+// Addendum 9: explicit commit authorship — commits are attributed to the
+// user's display name instead of the token's default. Email uses GitHub's
+// canonical noreply format (id+login) so attribution links to their account
+// regardless of email-privacy settings.
+export interface CommitAuthor {
+  name: string;
+  email: string;
+}
+
+export async function getAuthenticatedUser(
+  token: string
+): Promise<{ login: string; id: number; name: string | null }> {
+  const u = await gh(token, "/user");
+  return { login: u.login as string, id: u.id as number, name: (u.name as string | null) ?? null };
+}
+
 async function gh(token: string, path: string, init?: RequestInit) {
   const res = await fetch(`${GITHUB_API}${path}`, {
     ...init,
@@ -34,7 +50,8 @@ export async function pushFilesToGitHub(
   token: string,
   repoFullName: string,
   files: PushFile[],
-  message: string
+  message: string,
+  author?: CommitAuthor
 ): Promise<PushResult> {
   if (files.length === 0) {
     throw new Error("No files to push — build something in Office Chat or Code Canvas first.");
@@ -79,6 +96,7 @@ export async function pushFilesToGitHub(
       message,
       tree: tree.sha,
       parents: parentSha ? [parentSha] : [],
+      ...(author ? { author: { name: author.name, email: author.email } } : {}),
     }),
   });
 
@@ -120,6 +138,68 @@ export async function createUserRepo(
   isPrivate: boolean
 ): Promise<GitHubRepoSummary> {
   const repo = await gh(token, "/user/repos", {
+    method: "POST",
+    body: JSON.stringify({ name, private: isPrivate, auto_init: true }),
+  });
+  return {
+    fullName: repo.full_name,
+    private: repo.private,
+    defaultBranch: repo.default_branch,
+    updatedAt: repo.updated_at,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Addendum 9 Phase 1: org/repo picker support
+// ---------------------------------------------------------------------------
+
+export interface GitHubOwner {
+  login: string;
+  type: "User" | "Organization";
+}
+
+// The user's personal account plus every org they belong to (/user/orgs).
+// The personal account is always listed first.
+export async function listOwners(token: string): Promise<GitHubOwner[]> {
+  const me = await getAuthenticatedUser(token);
+  const orgs = (await gh(token, "/user/orgs?per_page=100")) as Array<
+    Record<string, unknown>
+  >;
+  return [
+    { login: me.login, type: "User" },
+    ...orgs.map((o) => ({ login: o.login as string, type: "Organization" as const })),
+  ];
+}
+
+// Repos visible to the token under a specific owner. The user's own login
+// uses /user/repos (includes collaborator repos); orgs use the public
+// users/{org}/repos listing, which respects the token's granted access.
+export async function listOwnerRepos(
+  token: string,
+  owner: string,
+  personalLogin: string
+): Promise<GitHubRepoSummary[]> {
+  const path =
+    owner === personalLogin
+      ? "/user/repos?sort=updated&per_page=100&affiliation=owner,collaborator"
+      : `/users/${encodeURIComponent(owner)}/repos?sort=updated&per_page=100`;
+  const repos = await gh(token, path);
+  return (repos as Array<Record<string, unknown>>).map((r) => ({
+    fullName: r.full_name as string,
+    private: r.private as boolean,
+    defaultBranch: r.default_branch as string,
+    updatedAt: r.updated_at as string,
+  }));
+}
+
+// Creates a repo under an org (the personal variant is createUserRepo).
+export async function createOrgRepo(
+  token: string,
+  owner: string,
+  name: string,
+  isPrivate: boolean
+): Promise<GitHubRepoSummary> {
+  const repo = await gh(token, `/orgs/${encodeURIComponent(owner)}/repos`, {
     method: "POST",
     body: JSON.stringify({ name, private: isPrivate, auto_init: true }),
   });

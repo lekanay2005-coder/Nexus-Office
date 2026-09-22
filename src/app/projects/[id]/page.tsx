@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import OfficeWorkspace from "./OfficeWorkspace";
 import SetupRequired from "@/components/SetupRequired";
+import { getOrCreateProfile } from "@/lib/profile";
 
 export default async function ProjectPage({
   params,
@@ -23,6 +24,11 @@ export default async function ProjectPage({
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
+
+  // Addendum 9: lazily create the profile row on workspace entry so the
+  // display-name prompt has something to read/update. Best-effort — the
+  // workspace renders even if the profiles table hasn't been migrated yet.
+  const profile = await getOrCreateProfile(supabase, user.id).catch(() => null);
 
   const { data: project } = await supabase
     .from("projects")
@@ -77,6 +83,7 @@ export default async function ProjectPage({
   return (
     <OfficeWorkspace
       project={project}
+      displayName={profile?.display_name ?? ""}
       initialRuns={runs ?? []}
       initialFiles={files ?? []}
       initialMemory={memory}

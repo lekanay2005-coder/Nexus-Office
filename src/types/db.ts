@@ -10,6 +10,9 @@ export interface Project {
   user_id: string;
   name: string;
   github_repo: string | null;
+  // Addendum 9: GitHub login (user or org) this project's repo lives under.
+  // null/empty = the user's personal account.
+  github_owner: string | null;
   vercel_project_id: string | null;
   default_branch: string | null;
   last_synced_to_github_at: string | null;
@@ -115,6 +118,14 @@ export interface Prompt {
   title: string;
   body: string;
   tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Addendum 9: per-user profile (display name shown instead of email).
+export interface Profile {
+  id: string;
+  display_name: string;
   created_at: string;
   updated_at: string;
 }

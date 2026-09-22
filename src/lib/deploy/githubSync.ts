@@ -2,9 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getDefaultBranchHeadSha,
   getFileContentAtRef,
+  getAuthenticatedUser,
   pushFilesToGitHub,
+  type CommitAuthor,
 } from "./github";
 import { getDecryptedApiKey } from "@/lib/apiKeys";
+import { getOrCreateProfile } from "@/lib/profile";
 
 export interface SyncConflict {
   path: string;
@@ -201,11 +204,30 @@ export async function applyGitHubSync({
 
   const commitMessage = await buildCommitMessage(supabase, projectId);
 
+  // Addendum 9: attribute the commit to the user's display name when set,
+  // using GitHub's canonical noreply email (id+login) so authorship links
+  // to their account regardless of email-privacy settings. Best-effort —
+  // attribution problems must never block a push.
+  let author: CommitAuthor | undefined;
+  try {
+    const profile = await getOrCreateProfile(supabase, userId);
+    if (profile.display_name) {
+      const me = await getAuthenticatedUser(token);
+      author = {
+        name: profile.display_name,
+        email: `${me.id}+${me.login}@users.noreply.github.com`,
+      };
+    }
+  } catch {
+    author = undefined;
+  }
+
   const { commitSha, branch } = await pushFilesToGitHub(
     token,
     project.github_repo,
     filesToPush,
-    commitMessage
+    commitMessage,
+    author
   );
 
   await supabase

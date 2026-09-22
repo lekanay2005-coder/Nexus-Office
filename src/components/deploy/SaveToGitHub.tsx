@@ -4,13 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useApprovalFlow } from "@/components/common/ApprovalDialog";
 import type { SyncConflict } from "@/lib/deploy/githubSync";
-
-interface RepoSummary {
-  fullName: string;
-  private: boolean;
-  defaultBranch: string;
-  updatedAt: string;
-}
+import RepoPicker from "./RepoPicker";
 
 type Status =
   | { kind: "idle" }
@@ -29,12 +23,6 @@ export default function SaveToGitHub({
   onRepoChange: (repo: string) => void;
 }) {
   const [browsing, setBrowsing] = useState(false);
-  const [repos, setRepos] = useState<RepoSummary[] | null>(null);
-  const [reposLoading, setReposLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [newRepoName, setNewRepoName] = useState("");
-  const [newRepoPrivate, setNewRepoPrivate] = useState(true);
 
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -44,39 +32,6 @@ export default function SaveToGitHub({
   // Approval-gated GitHub commits (Addendum 3): a 409 APPROVAL_REQUIRED
   // response raises the confirm dialog and retries with confirmed=true.
   const { fetchWithApproval, dialogEl } = useApprovalFlow(projectId);
-
-  async function loadRepos() {
-    setReposLoading(true);
-    const res = await fetch(`/api/projects/${projectId}/github/repos`);
-    const data = await res.json();
-    setReposLoading(false);
-    if (!res.ok) {
-      if (data.error === "RECONNECT_GITHUB") setStatus({ kind: "reconnect" });
-      else setStatus({ kind: "error", message: data.error ?? "Failed to list repos" });
-      return;
-    }
-    setRepos(data.repos);
-  }
-
-  async function createRepo() {
-    if (!newRepoName.trim()) return;
-    setCreating(true);
-    const res = await fetch(`/api/projects/${projectId}/github/repos`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newRepoName.trim(), private: newRepoPrivate }),
-    });
-    const data = await res.json();
-    setCreating(false);
-    if (!res.ok) {
-      if (data.error === "RECONNECT_GITHUB") setStatus({ kind: "reconnect" });
-      else setStatus({ kind: "error", message: data.error ?? "Failed to create repo" });
-      return;
-    }
-    onRepoChange(data.repo.fullName);
-    setBrowsing(false);
-    setNewRepoName("");
-  }
 
   async function handleSave(withResolutions?: Record<string, "mine" | "theirs">) {
     setSaving(true);
@@ -123,9 +78,6 @@ export default function SaveToGitHub({
     setResolutions((prev) => ({ ...prev, [path]: choice }));
   }
 
-  const filteredRepos =
-    repos?.filter((r) => r.fullName.toLowerCase().includes(search.toLowerCase())) ?? [];
-
   return (
     <section>
       {dialogEl}
@@ -147,10 +99,7 @@ export default function SaveToGitHub({
             )}
           </span>
           <button
-            onClick={() => {
-              setBrowsing((v) => !v);
-              if (!repos) loadRepos();
-            }}
+            onClick={() => setBrowsing((v) => !v)}
             className="shrink-0 rounded bg-white/5 px-3 py-1.5 text-xs text-neutral-200 hover:bg-white/10"
           >
             {browsing ? "Close" : "Connect a Repo"}
@@ -158,53 +107,13 @@ export default function SaveToGitHub({
         </div>
 
         {browsing && (
-          <div className="space-y-2 border-t border-white/10 pt-3">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search your repos…"
-              className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100 outline-none focus:border-neutral-500"
-            />
-            {reposLoading && <p className="text-xs text-neutral-500">Loading repos…</p>}
-            <div className="max-h-40 space-y-1 overflow-y-auto">
-              {filteredRepos.map((r) => (
-                <button
-                  key={r.fullName}
-                  onClick={() => {
-                    onRepoChange(r.fullName);
-                    setBrowsing(false);
-                  }}
-                  className="block w-full rounded px-2 py-1.5 text-left text-xs text-neutral-300 hover:bg-white/5"
-                >
-                  {r.fullName} {r.private && <span className="text-neutral-600">(private)</span>}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 border-t border-white/10 pt-2">
-              <input
-                value={newRepoName}
-                onChange={(e) => setNewRepoName(e.target.value)}
-                placeholder="New repo name"
-                className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:border-neutral-500"
-              />
-              <label className="flex items-center gap-1 text-xs text-neutral-400">
-                <input
-                  type="checkbox"
-                  checked={newRepoPrivate}
-                  onChange={(e) => setNewRepoPrivate(e.target.checked)}
-                />
-                Private
-              </label>
-              <button
-                onClick={createRepo}
-                disabled={creating || !newRepoName.trim()}
-                className="rounded bg-[var(--role-strategist)] px-2 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {creating ? "Creating…" : "Create"}
-              </button>
-            </div>
-          </div>
+          <RepoPicker
+            onPick={(fullName) => {
+              onRepoChange(fullName);
+              setBrowsing(false);
+            }}
+            onClose={() => setBrowsing(false)}
+          />
         )}
 
         <button
