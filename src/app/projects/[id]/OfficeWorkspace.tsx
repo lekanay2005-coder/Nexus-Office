@@ -7,6 +7,9 @@ import CodeCanvas from "@/components/canvas/CodeCanvas";
 import ModelRouterPanel from "@/components/settings/ModelRouterPanel";
 import ConnectionsPanel from "@/components/settings/ConnectionsPanel";
 import IntegrationsPanel from "@/components/settings/IntegrationsPanel";
+import BrandingPanel from "@/components/settings/BrandingPanel";
+import UpgradeCard from "@/components/settings/UpgradeCard";
+import NexusLogo from "@/components/brand/NexusLogo";
 import DeployDesk from "@/components/deploy/DeployDesk";
 import MemoryBoard from "@/components/memory/MemoryBoard";
 import CostMeter from "@/components/cost/CostMeter";
@@ -41,15 +44,23 @@ export default function OfficeWorkspace({
 }) {
   const [tab, setTab] = useState<Tab>("chat");
   const [canvasKey, setCanvasKey] = useState(0);
+  // Local copy so BrandingPanel toggles (e.g. preview watermark) apply
+  // immediately without a full refetch.
+  const [projectState, setProjectState] = useState<Project>(project);
+
+  function applyProjectPatch(patch: Partial<Project>) {
+    setProjectState((prev) => ({ ...prev, ...patch }));
+  }
 
   return (
     <div className="flex h-screen flex-col text-neutral-100">
       <header className="glass-panel flex items-center justify-between border-x-0 border-t-0 px-4 py-2">
-        <div className="flex items-center gap-3">
-          <Link href="/projects" className="text-sm text-neutral-500 hover:text-neutral-300">
+        <div className="flex min-w-0 items-center gap-3">
+          <NexusLogo surface="nav" className="shrink-0" />
+          <Link href="/projects" className="shrink-0 text-sm text-neutral-500 hover:text-neutral-300">
             ← Projects
           </Link>
-          <h1 className="text-sm font-semibold">{project.name}</h1>
+          <h1 className="truncate text-sm font-semibold">{projectState.name}</h1>
         </div>
         <nav className="flex gap-1 rounded-md bg-white/5 p-1">
           <TabButton active={tab === "chat"} onClick={() => setTab("chat")}>
@@ -93,14 +104,19 @@ export default function OfficeWorkspace({
           </div>
         )}
         {tab === "canvas" && (
-          <CodeCanvas key={canvasKey} projectId={project.id} initialFiles={initialFiles} />
+          <CodeCanvas
+            key={canvasKey}
+            projectId={projectState.id}
+            initialFiles={initialFiles}
+            showWatermark={projectState.show_preview_watermark}
+          />
         )}
         {tab === "memory" && (
           <MemoryBoard projectId={project.id} initialMemory={initialMemory} />
         )}
         {tab === "deploy" && (
           <DeployDesk
-            project={project}
+            project={projectState}
             initialDeploys={initialDeploys}
             hostingIntegrations={initialIntegrations.filter((i) => i.type === "hosting")}
           />
@@ -110,6 +126,12 @@ export default function OfficeWorkspace({
         {tab === "permissions" && <PermissionsPanel projectId={project.id} />}
         {tab === "settings" && (
           <div className="space-y-10">
+            <div className="mx-auto max-w-2xl px-6 pt-8">
+              <UpgradeCard isPro={projectState.is_pro} />
+            </div>
+            <div className="mx-auto max-w-2xl px-6">
+              <BrandingPanel project={projectState} onChanged={applyProjectPatch} />
+            </div>
             <ModelRouterPanel
               projectId={project.id}
               initialRoleModels={initialRoleModels}

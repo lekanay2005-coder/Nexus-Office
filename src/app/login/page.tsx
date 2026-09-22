@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SetupRequired from "@/components/SetupRequired";
+import NexusLogo from "@/components/brand/NexusLogo";
 
 export default function LoginPage() {
   // All hooks run unconditionally on every render — the env-var gate below
@@ -68,10 +69,13 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="glass-panel w-full max-w-sm rounded-xl p-8">
-        <h1 className="mb-1 text-xl font-semibold text-neutral-100">Nexus Office</h1>
-        <p className="mb-6 text-sm text-neutral-400">
-          {mode === "signin" ? "Sign in to your workspace" : "Create your account"}
-        </p>
+        <div className="mb-5 flex flex-col items-center text-center">
+          <NexusLogo surface="card" glow className="mb-3" />
+          <h1 className="mb-1 text-xl font-semibold text-neutral-100">Nexus Office</h1>
+          <p className="text-sm text-neutral-400">
+            {mode === "signin" ? "Sign in to your workspace" : "Create your account"}
+          </p>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <input

@@ -31,7 +31,9 @@ export async function GET(
   return NextResponse.json({ project, memory });
 }
 
-// Body: { github_repo?: string, vercel_project_id?: string }
+// Body: { github_repo?: string, vercel_project_id?: string,
+//          is_pro?: boolean, show_preview_watermark?: boolean,
+//          watermark_deployed_site?: boolean }
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -50,6 +52,13 @@ export async function PATCH(
   if (typeof body.github_repo === "string") patch.github_repo = body.github_repo.trim() || null;
   if (typeof body.vercel_project_id === "string") {
     patch.vercel_project_id = body.vercel_project_id.trim() || null;
+  }
+  if (typeof body.is_pro === "boolean") patch.is_pro = body.is_pro;
+  if (typeof body.show_preview_watermark === "boolean") {
+    patch.show_preview_watermark = body.show_preview_watermark;
+  }
+  if (typeof body.watermark_deployed_site === "boolean") {
+    patch.watermark_deployed_site = body.watermark_deployed_site;
   }
   patch.updated_at = new Date().toISOString();
 

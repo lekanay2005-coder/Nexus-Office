@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { pushFilesToGitHub } from "./github";
+import { pushFilesToGitHub, type PushFile } from "./github";
 import { getLatestDeployment, mapVercelStateToDeployStatus } from "./vercel";
 import { getDecryptedApiKey } from "@/lib/apiKeys";
 import { getIntegrationApiKey } from "@/lib/secrets";
+import { injectWatermark } from "@/lib/brand";
 
 // Local/dev escape hatch mirroring NEXUS_MOCK_LLM: set NEXUS_MOCK_DEPLOY=1
 // to exercise the full Deploy Desk flow (push -> deploy row -> status
@@ -27,7 +28,7 @@ export async function startDeploy({
 }: StartDeployArgs) {
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("github_repo, vercel_project_id")
+    .select("github_repo, vercel_project_id, is_pro, watermark_deployed_site")
     .eq("id", projectId)
     .single();
 
@@ -72,7 +73,7 @@ export async function startDeploy({
   const { commitSha, branch } = await pushFilesToGitHub(
     githubToken,
     project.github_repo,
-    (files ?? []).map((f) => ({ path: f.path, content: f.content })),
+    withDeployWatermark(files ?? [], project),
     "Deploy from Nexus Office"
   );
 
@@ -170,6 +171,27 @@ export async function startDeploy({
     .single();
 
   return updated ?? deploy;
+}
+
+// Addendum 4: Ops appends the watermark badge to the deploy payload's HTML
+// files right before the push — never to the rows in the files table, which
+// stay exactly as the user wrote them, so no compounding happens across
+// deploys (each deploy re-reads pristine content).
+//
+// Effective toggle = watermark_deployed_site AND NOT is_pro: on by default for
+// free-tier projects, always off once a project is marked pro.
+function withDeployWatermark(
+  files: { path: string; content: string }[],
+  project: { is_pro: boolean | null; watermark_deployed_site: boolean | null }
+): PushFile[] {
+  if (project.is_pro || project.watermark_deployed_site === false) {
+    return files.map((f) => ({ path: f.path, content: f.content }));
+  }
+  return files.map((f) =>
+    f.path.toLowerCase().endsWith(".html")
+      ? { path: f.path, content: injectWatermark(f.content) }
+      : { path: f.path, content: f.content }
+  );
 }
 
 export interface RefreshDeployArgs {

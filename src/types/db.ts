@@ -16,6 +16,10 @@ export interface Project {
   // Addendum 3 approval-gating (migration 0006). Optional because the
   // column may not exist yet in not-yet-migrated databases.
   require_approval?: boolean;
+  // Addendum 4 branding/watermark feature flags (migration 0003_watermark).
+  is_pro: boolean;
+  show_preview_watermark: boolean;
+  watermark_deployed_site: boolean;
   created_at: string;
   updated_at: string;
 }

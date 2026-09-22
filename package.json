@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "assets": "node scripts/generate-brand-assets.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",

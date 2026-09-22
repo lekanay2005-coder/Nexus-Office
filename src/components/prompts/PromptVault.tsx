@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import NexusLogo from "@/components/brand/NexusLogo";
 import type { Prompt } from "@/types/db";
 
 export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt[] }) {
@@ -49,11 +50,14 @@ export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt
     <div className="min-h-screen bg-neutral-950 px-6 py-10 text-neutral-100">
       <div className="mx-auto max-w-3xl">
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <Link href="/projects" className="text-sm text-neutral-500 hover:text-neutral-300">
-              ← Projects
-            </Link>
-            <h1 className="mt-1 text-2xl font-semibold">Prompt Vault</h1>
+          <div className="flex items-center gap-3">
+            <NexusLogo surface="nav" />
+            <div>
+              <Link href="/projects" className="text-sm text-neutral-500 hover:text-neutral-300">
+                ← Projects
+              </Link>
+              <h1 className="mt-1 text-2xl font-semibold">Prompt Vault</h1>
+            </div>
           </div>
           <button
             onClick={() => setEditing("new")}

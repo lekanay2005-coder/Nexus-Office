@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Editor from "@monaco-editor/react";
+import { injectWatermark } from "@/lib/brand";
 import type { ProjectFile } from "@/types/db";
 
 function languageForPath(path: string): string {
@@ -23,9 +24,11 @@ function languageForPath(path: string): string {
 export default function CodeCanvas({
   projectId,
   initialFiles,
+  showWatermark = true,
 }: {
   projectId: string;
   initialFiles: ProjectFile[];
+  showWatermark?: boolean;
 }) {
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
   const [selectedPath, setSelectedPath] = useState<string | null>(initialFiles[0]?.path ?? null);
@@ -82,7 +85,12 @@ export default function CodeCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const previewHtml = useMemo(() => buildPreviewHtml(files), [files]);
+  // Watermark is appended to the iframe srcdoc at render time only — the
+  // underlying file contents are never modified.
+  const previewHtml = useMemo(
+    () => (showWatermark ? injectWatermark(buildPreviewHtml(files)) : buildPreviewHtml(files)),
+    [files, showWatermark]
+  );
 
   return (
     <div className="flex h-full">

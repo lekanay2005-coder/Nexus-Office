@@ -1,5 +1,4 @@
 @import "tailwindcss";
-
 :root {
   /* "late-night command center" theme — always dark, no light-mode branch */
   --background: #0b0d12;
@@ -71,4 +70,82 @@ body {
   );
   background-size: 200% 100%;
   animation: relay-line-fill 1.2s linear infinite;
+}
+
+/* Addendum 6: the brand backdrop lives in the root layout (.nx-backdrop);
+   body stays transparent so it shows through on every page, and the dark
+   #0B0D12 floor comes from the backdrop layer itself (no white flash). */
+body {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Addendum 6: brand background (mounted once by the root layout)
+   - #0B0D12 fallback color paints instantly (no white/blank flash while the
+     PNG decodes, and a solid floor where 'fixed' attachment is unsupported).
+   - cover + center fills any aspect ratio (375px → ultra-wide) without gaps.
+   - Desktop: attachment fixed (classic parallax-glued backdrop).
+   - ≤768px (iOS Safari paints fixed attachments badly / jankily): switch to
+     scroll — the layer itself is position:fixed inset-0, so coverage is
+     identical either way.
+   --------------------------------------------------------------------------- */
+.nx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -50;
+  pointer-events: none;
+  background-color: #0b0d12;
+  background-image: url("/background.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
+  -webkit-background-attachment: fixed;
+}
+
+@media (max-width: 768px) {
+  .nx-backdrop {
+    background-attachment: scroll;
+    -webkit-background-attachment: scroll;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-backdrop {
+    background-attachment: scroll;
+    -webkit-background-attachment: scroll;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Hacker terminal code-rain layer (mounted once by the root layout).
+   Sits ABOVE the static .nx-backdrop PNG (instant-load underlay) and BELOW
+   all page content. pointer-events: none — never intercepts clicks.
+   Opacity: ambient ≈ 10% everywhere; reduced ≈ 5% on reading-heavy routes
+   (Office Chat / Code Canvas, i.e. /projects/[id]). The canvas additionally
+   paints its own ~22% #0B0D12 scrim per frame (dim option in rain.ts) so
+   glyphs stay legible over the Addendum 8 background imagery.
+   --------------------------------------------------------------------------- */
+.nx-rain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.1;
+  transition: opacity 0.6s ease;
+}
+
+.nx-rain-ambient {
+  opacity: 0.1;
+}
+
+.nx-rain-reduced {
+  opacity: 0.05;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Engine draws a single static frame; keep it faint and unchanging. */
+  .nx-rain {
+    opacity: 0.06;
+  }
 }

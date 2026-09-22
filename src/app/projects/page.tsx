@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import NewProjectForm from "./NewProjectForm";
 import SetupRequired from "@/components/SetupRequired";
+import NexusLogo from "@/components/brand/NexusLogo";
 
 export default async function ProjectsPage() {
   if (
@@ -27,9 +28,15 @@ export default async function ProjectsPage() {
   return (
     <div className="min-h-screen px-6 py-10 text-neutral-100">
       <div className="mx-auto max-w-2xl">
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Your Projects</h1>
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <NexusLogo surface="nav" />
+            <h1 className="text-2xl font-semibold">Your Projects</h1>
+          </div>
           <div className="flex items-center gap-4">
+            <Link href="/pricing" className="text-sm text-violet-400 hover:text-violet-300">
+              Upgrade to Pro
+            </Link>
             <Link href="/prompts" className="text-sm text-neutral-400 hover:text-neutral-200">
               Prompt Vault
             </Link>

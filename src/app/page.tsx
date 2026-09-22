@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import LandingPage from "@/components/marketing/LandingPage";
 import SetupRequired from "@/components/SetupRequired";
 
+// Addendum 7: landing page. Logged-in users still go straight to their
+// workspace (previous behavior preserved); anonymous visitors now get the
+// landing page instead of an immediate bounce to /login.
+
 export default async function Home() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
