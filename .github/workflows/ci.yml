@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Supersede superseded runs on the same branch — each push only needs the
+# latest verdict.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # matches local dev (v24)
+          cache: npm # package-lock.json is committed
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      - name: Lint (eslint)
+        run: npx eslint src
+
+      # No Supabase env vars needed: every page guards on the env vars and
+      # falls back to <SetupRequired />, and API routes are dynamic (never
+      # executed at build time) — verified by building with .env.local removed.
+      - name: Build (next build)
+        run: npm run build
