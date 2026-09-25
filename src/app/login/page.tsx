@@ -99,64 +99,86 @@ function LoginForm({ initialMode = "signin" }: { initialMode?: "signin" | "signu
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
+      {/* Addendum 14: auth as terminal boot — phosphor prompt, mono labels. */}
       <div className="glass-panel w-full max-w-sm rounded-xl p-8">
         <div className="mb-5 flex flex-col items-center text-center">
           <NexusLogo surface="card" glow className="mb-3" />
-          <h1 className="mb-1 text-xl font-semibold text-neutral-100">Nexus Office</h1>
-          <p className="text-sm text-neutral-400">
-            {mode === "signin" ? "Sign in to your workspace" : "Create your account"}
+          <p className="data-mono text-xs text-[var(--term-accent)] phosphor">
+            nexus@office:~$ auth --{mode === "signin" ? "in" : "up"}
+          </p>
+          <h1 className="mt-2 text-xl font-semibold text-neutral-100">Nexus Office</h1>
+          <p className="mt-1 text-sm text-neutral-400">
+            {mode === "signin"
+              ? "Sign in to your workspace"
+              : "Create your account"}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <input
-            type="email"
-            required
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-neutral-500"
-          />
-          <input
-            type="password"
-            required
-            minLength={6}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-neutral-500"
-          />
+          <label className="block">
+            <span className="data-mono mb-1 block text-[10px] uppercase tracking-widest text-neutral-500">
+              email
+            </span>
+            <input
+              type="email"
+              required
+              placeholder="you@domain.dev"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-[var(--term-accent)]"
+            />
+          </label>
+          <label className="block">
+            <span className="data-mono mb-1 block text-[10px] uppercase tracking-widest text-neutral-500">
+              password
+            </span>
+            <input
+              type="password"
+              required
+              minLength={6}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-[var(--term-accent)]"
+            />
+          </label>
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-[var(--role-strategist)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="btn-terminal data-mono w-full rounded-md bg-[var(--role-strategist)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {mode === "signin" ? "Sign in" : "Sign up"}
+            {loading ? "AUTHENTICATING…" : mode === "signin" ? "AUTH --IN" : "AUTH --UP"}
           </button>
         </form>
 
-        {statusMessage && <p className="mt-3 text-sm text-amber-400">{statusMessage}</p>}
+        {statusMessage && (
+          <p className="data-mono mt-3 text-xs text-amber-400">{statusMessage}</p>
+        )}
 
         <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-neutral-800" />
-          <span className="text-xs text-neutral-600">or</span>
+          <span className="data-mono text-[10px] uppercase tracking-widest text-neutral-600">
+            or
+          </span>
           <div className="h-px flex-1 bg-neutral-800" />
         </div>
 
         <button
           onClick={handleGitHubSignIn}
           disabled={oauthLoading}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm font-medium text-neutral-100 hover:bg-neutral-900 disabled:opacity-50"
+          className="btn-terminal flex w-full items-center justify-center gap-2 rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm font-medium text-neutral-100 hover:border-[var(--term-accent)] hover:bg-neutral-900 disabled:opacity-50"
         >
           <GitHubIcon />
-          {oauthLoading ? "Redirecting…" : "Continue with GitHub"}
+          <span className="data-mono text-xs">
+            {oauthLoading ? "handshake…" : "Continue with GitHub"}
+          </span>
         </button>
 
         <button
           onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-          className="mt-4 text-sm text-neutral-400 hover:text-neutral-200"
+          className="data-mono mt-4 w-full text-center text-xs text-neutral-400 hover:text-[var(--term-accent)]"
         >
-          {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
+          {mode === "signin" ? "no account? register →" : "have an account? auth --in →"}
         </button>
       </div>
     </div>

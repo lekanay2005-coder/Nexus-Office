@@ -73,39 +73,49 @@ export default function OfficeWorkspace({
       <header className="glass-panel flex items-center justify-between border-x-0 border-t-0 px-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <NexusLogo surface="nav" className="shrink-0" />
-          <Link href="/projects" className="shrink-0 text-sm text-neutral-500 hover:text-neutral-300">
-            ← Projects
+          {/* Addendum 14: terminal-style breadcrumb — repo path as console cwd. */}
+          <Link
+            href="/projects"
+            className="shrink-0 font-mono text-xs text-neutral-500 hover:text-[var(--term-accent)]"
+          >
+            ~/nexus
           </Link>
-          <h1 className="truncate text-sm font-semibold">{projectState.name}</h1>
+          <span className="shrink-0 font-mono text-xs text-neutral-700">/</span>
+          <h1 className="truncate font-mono text-sm font-semibold text-neutral-100">
+            {projectState.name}
+          </h1>
         </div>
-        <nav className="flex gap-1 rounded-md bg-white/5 p-1">
+        <nav className="flex gap-0.5 rounded-md bg-white/5 p-1" aria-label="Workspace sections">
           <TabButton active={tab === "chat"} onClick={() => setTab("chat")}>
-            Office Chat
+            Chat
           </TabButton>
           <TabButton active={tab === "canvas"} onClick={() => setTab("canvas")}>
-            Code Canvas
+            Canvas
           </TabButton>
           <TabButton active={tab === "memory"} onClick={() => setTab("memory")}>
-            Memory Board
+            Memory
           </TabButton>
           <TabButton active={tab === "deploy"} onClick={() => setTab("deploy")}>
-            Deploy Desk
+            Deploy
           </TabButton>
           <TabButton active={tab === "cost"} onClick={() => setTab("cost")}>
-            Cost Meter
+            Cost
           </TabButton>
           <TabButton active={tab === "audit"} onClick={() => setTab("audit")}>
             Audit
           </TabButton>
           <TabButton active={tab === "permissions"} onClick={() => setTab("permissions")}>
-            Permissions
+            Perms
           </TabButton>
           <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>
-            Settings
+            Config
           </TabButton>
         </nav>
-        <Link href="/prompts" className="text-sm text-neutral-500 hover:text-neutral-200">
-          Prompt Vault
+        <Link
+          href="/prompts"
+          className="font-mono text-xs text-neutral-500 hover:text-[var(--term-accent)]"
+        >
+          vault/
         </Link>
         <UserAvatarMenu
           displayName={displayName}
@@ -270,26 +280,26 @@ function UserAvatarMenu({
             role="menu"
             className="absolute top-10 right-0 z-20 w-48 rounded-lg border border-neutral-800 bg-neutral-900 py-1 shadow-xl"
           >
-            <div className="px-3 py-2 text-xs text-neutral-500">
+            <div className="px-3 py-2 font-mono text-xs text-neutral-500">
               {displayName && <div className="font-medium text-neutral-200">{displayName}</div>}
               {email && <div className="truncate">{email}</div>}
             </div>
             <Link
               href="/account/profile"
               onClick={onClose}
-              className="block px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+              className="block px-3 py-1.5 font-mono text-xs text-neutral-300 hover:bg-neutral-800 hover:text-[var(--term-accent)]"
               role="menuitem"
             >
-              Profile
+              ~/account
             </Link>
             <form action="/auth/signout" method="post" className="m-0">
               <button
                 type="submit"
                 onClick={onClose}
-                className="w-full px-3 py-1.5 text-left text-sm text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                className="w-full px-3 py-1.5 text-left font-mono text-xs text-neutral-300 hover:bg-neutral-800 hover:text-[var(--role-ops)]"
                 role="menuitem"
               >
-                Sign out
+                logout
               </button>
             </form>
           </div>

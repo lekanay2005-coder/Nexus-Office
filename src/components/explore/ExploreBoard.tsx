@@ -117,14 +117,24 @@ export default function ExploreBoard({ signedIn }: { signedIn: boolean }) {
 
       {prompts === null && <p className="text-sm text-neutral-500">Loading…</p>}
       {prompts !== null && filtered.length === 0 && (
-        <p className="text-sm text-neutral-500">
-          No public prompts yet. Share one from your Prompt Vault to see it here.
-        </p>
+        <div className="glass-panel rounded-lg p-6 text-center">
+          <p className="data-mono text-sm text-[var(--term-accent)] phosphor">
+            feed empty
+            <span className="cursor-block" />
+          </p>
+          <p className="mt-2 text-sm text-neutral-400">
+            No public prompts yet. Share one from your Prompt Vault to see it here.
+          </p>
+        </div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {filtered.map((p) => (
-          <article key={p.prompt_id} className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+        {filtered.map((p, i) => (
+          <article
+            key={p.prompt_id}
+            className="sweep-in rounded-lg border border-neutral-800 bg-neutral-900 p-4"
+            style={{ animationDelay: `${i * 30}ms` }}
+          >
             <div className="mb-2 flex items-center gap-2">
               {p.author_avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element

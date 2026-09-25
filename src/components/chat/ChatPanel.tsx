@@ -210,12 +210,26 @@ export default function ChatPanel({
 
   return (
     <div className="flex h-full flex-col">
+      {/* Addendum 14: terminal session header — process-style label above the
+          transcript, reinforcing the console metaphor. */}
+      <div className="term-titlebar border-x-0 border-t-0 px-4">
+        <span className="term-dot" style={{ background: "#ff5f56" }} />
+        <span className="term-dot" style={{ background: "#ffbd2e" }} />
+        <span className="term-dot" style={{ background: "#27c93f" }} />
+        <span className="ml-1">office-chat — live session</span>
+      </div>
       <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
         {runs.length === 0 && (
-          <p className="text-sm text-neutral-500">
-            Say something to your team. Simple questions get a direct answer from the
-            Strategist; anything requiring real work runs the full 5-role pipeline.
-          </p>
+          <div className="glass-panel rounded-lg p-6 text-center" data-tour="office-chat">
+            <p className="data-mono text-sm text-[var(--term-accent)] phosphor">
+              nexus@office:~$ awaiting first directive
+              <span className="cursor-block" />
+            </p>
+            <p className="mt-3 text-sm text-neutral-400">
+              Say something to your team. Simple questions get a direct answer from the
+              Strategist; anything requiring real work runs the full 5-role pipeline.
+            </p>
+          </div>
         )}
 
         {runs.map((run) => (
@@ -284,19 +298,25 @@ export default function ChatPanel({
       {error && <p className="px-4 pb-1 text-xs text-red-400">{error}</p>}
 
       <form onSubmit={handleSubmit} className="glass-panel flex gap-2 border-x-0 border-b-0 p-3">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask your team anything…"
-          disabled={pending}
-          className="flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-neutral-500 disabled:opacity-50"
-        />
+        <div className="relative flex-1">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-[var(--term-accent)]">
+            &gt;
+          </span>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Describe the mission…"
+            disabled={pending}
+            aria-label="Message the team"
+            className="w-full rounded-md border border-neutral-700 bg-neutral-900 py-2 pl-7 pr-3 text-sm text-neutral-100 outline-none focus:border-[var(--term-accent)] disabled:opacity-50"
+          />
+        </div>
         <button
           type="submit"
           disabled={pending || !input.trim()}
-          className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+          className="btn-terminal data-mono rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
         >
-          Send
+          {pending ? "RUNNING" : "EXEC"}
         </button>
       </form>
     </div>

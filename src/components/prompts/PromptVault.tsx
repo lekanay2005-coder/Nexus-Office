@@ -75,17 +75,23 @@ export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt
           <div className="flex items-center gap-3">
             <NexusLogo surface="nav" />
             <div>
-              <Link href="/projects" className="text-sm text-neutral-500 hover:text-neutral-300">
-                ← Projects
+              <Link
+                href="/projects"
+                className="data-mono text-xs text-neutral-500 hover:text-[var(--term-accent)]"
+              >
+                ~/nexus
               </Link>
               <h1 className="mt-1 text-2xl font-semibold">Prompt Vault</h1>
+              <p className="data-mono mt-0.5 text-[11px] text-neutral-600">
+                git-backed · one .json per prompt
+              </p>
             </div>
           </div>
           <button
             onClick={() => setEditing("new")}
-            className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
+            className="btn-terminal data-mono rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
           >
-            New Prompt
+            + new prompt
           </button>
         </div>
 
@@ -123,10 +129,11 @@ export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt
         )}
 
         <ul className="mt-6 space-y-3">
-          {filtered.map((prompt) => (
+          {filtered.map((prompt, i) => (
             <li
               key={prompt.id}
-              className="rounded-lg border border-neutral-800 bg-neutral-900 p-4"
+              className="sweep-in rounded-lg border border-neutral-800 bg-neutral-900 p-4"
+              style={{ animationDelay: `${i * 30}ms` }}
             >
               <div className="mb-1 flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">

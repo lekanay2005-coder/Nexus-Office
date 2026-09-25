@@ -63,6 +63,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <NexusBackdrop />
         <HackerBackground />
+        {/* Addendum 14: CRT scanlines + vignette above backdrop/rain, below content. */}
+        <div aria-hidden="true" className="crt-overlay" />
       </body>
     </html>
   );
