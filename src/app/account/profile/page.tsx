@@ -23,18 +23,23 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+  // The real reason a load failed (e.g. a Supabase migration missing in this
+  // environment), so the page never shows an opaque "Failed to load profile".
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/me/display-name");
-        if (res.ok) {
-          const data = await res.json();
+        const data = await res.json().catch(() => null);
+        if (res.ok && data) {
           setInfo(data);
           setNameDraft(data.displayName ?? "");
+        } else {
+          setLoadError(data?.error ?? `Request failed (HTTP ${res.status})`);
         }
-      } catch {
-        // stay in loading state
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : "Network error");
       }
       setLoading(false);
     })();
@@ -159,6 +164,9 @@ export default function ProfilePage() {
       <div className="min-h-screen px-6 py-10 text-neutral-100">
         <div className="mx-auto max-w-2xl">
           <p className="text-sm text-red-400">Failed to load profile.</p>
+          {loadError && (
+            <p className="mt-1 text-xs text-neutral-500">Reason: {loadError}</p>
+          )}
         </div>
       </div>
     );

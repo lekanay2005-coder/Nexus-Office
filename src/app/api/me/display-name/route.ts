@@ -13,7 +13,17 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const profile = await getOrCreateProfile(supabase, user.id);
+  // Surface the real failure reason (e.g. a missing `profiles` table when a
+  // migration hasn't run against this environment) instead of an opaque 500.
+  let profile;
+  try {
+    profile = await getOrCreateProfile(supabase, user.id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to load profile";
+    console.error("[display-name GET]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+
   return NextResponse.json({
     displayName: profile.display_name,
     avatarUrl: profile.avatar_url,

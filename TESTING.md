@@ -76,6 +76,15 @@ production DB doesn't have yet breaks the affected routes at request time even
 though the build succeeded. Current migrations: `0001_init.sql` through
 `0009_feedback_table.sql`.
 
+**This is mandatory on every deploy, not just local dev** — a missed
+production migration has now caused two outages (the Addendum 7–10 tables
+missing in production surfaced as "Failed to load profile" and broken
+audit/capabilities/feedback routes). Quick production schema check: hit
+`https://<project-ref>.supabase.co/rest/v1/<table>?limit=0` with the anon key
+— a `PGRST205` "Could not find the table" error means a migration is pending.
+All migration files are written idempotently (`if not exists`), so re-running
+them in order is safe.
+
 ### Bundle-external native/WASM dependencies
 
 `@codebuff/sdk` requires `serverExternalPackages` config in `next.config.ts` —
