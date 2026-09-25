@@ -1,21 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SetupRequired from "@/components/SetupRequired";
 import NexusLogo from "@/components/brand/NexusLogo";
 
-export default function LoginPage() {
+export default function LoginPage({
+  initialMode = "signin",
+}: { initialMode?: "signin" | "signup" } = {}) {
   // All hooks run unconditionally on every render — the env-var gate below
   // returns early but must never skip hook calls (Rules of Hooks).
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Surface OAuth errors that the /auth/callback route redirects back here
+  // with, e.g. ?oauth_error=access_denied if the user cancels GitHub consent.
+  // Derived during render instead of in an effect, so the message shows on
+  // first paint without a cascading setState pass.
+  const oauthErrorParam = searchParams.get("oauth_error");
+  const [oauthError, setOauthError] = useState<string | null>(
+    oauthErrorParam ? decodeURIComponent(oauthErrorParam) : null
+  );
+  const statusMessage = oauthError ?? status;
 
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -104,7 +117,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {status && <p className="mt-3 text-sm text-amber-400">{status}</p>}
+        {statusMessage && <p className="mt-3 text-sm text-amber-400">{statusMessage}</p>}
 
         <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-neutral-800" />

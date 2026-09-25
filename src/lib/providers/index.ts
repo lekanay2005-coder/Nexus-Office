@@ -7,6 +7,10 @@ export interface CompletionResult {
   text: string;
   tokensIn: number;
   tokensOut: number;
+  // Set only by the Codebuff agent path: the role's structured output
+  // payload (e.g. the strategist's routing decision, Ops' memory update).
+  // The plain provider path parses fenced blocks instead.
+  structured?: Record<string, unknown> | null;
 }
 
 export type ProviderName = "anthropic" | "openai" | "google";
@@ -33,6 +37,71 @@ export const DEFAULT_PROVIDER_CONFIG: ProviderConfig = {
   model: "gemini-3.6-flash",
 };
 
+// A CompletionResult with no structured payload (plain provider path).
+export function plainResult(result: Omit<CompletionResult, "structured">): CompletionResult {
+  return { ...result, structured: null };
+}
+
+// Shared resilience policy (patterns borrowed from the Codebuff runtime:
+// bounded retries with exponential backoff and a hard wall-clock timeout so
+// a wedged provider call can't stall a pipeline run forever).
+const COMPLETE_TIMEOUT_MS = 120_000;
+const COMPLETE_MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 500;
+
+function isRetryableError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  return (
+    message.includes("overloaded") ||
+    message.includes("rate limit") ||
+    message.includes("429") ||
+    message.includes("503") ||
+    message.includes("529") ||
+    message.includes("timeout") ||
+    message.includes("fetch failed") ||
+    message.includes("econnreset") ||
+    message.includes("network")
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function completeWithResilience(
+  config: ProviderConfig,
+  req: CompletionRequest
+): Promise<CompletionResult> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= COMPLETE_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await withTimeout(complete(config, req), COMPLETE_TIMEOUT_MS, config.provider);
+    } catch (err) {
+      lastError = err;
+      if (attempt === COMPLETE_MAX_ATTEMPTS || !isRetryableError(err)) throw err;
+      await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+    }
+  }
+  throw lastError;
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, provider: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${provider} call timed out after ${ms / 1000}s`)),
+          ms
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Local/dev escape hatch: set NEXUS_MOCK_LLM=1 to run the full pipeline
 // against canned, role-aware responses instead of calling a real provider.
 // Lets us test routing, persistence, and the UI without API keys/spend.
@@ -42,6 +111,14 @@ export async function complete(
   config: ProviderConfig,
   req: CompletionRequest
 ): Promise<CompletionResult> {
+  const result = await completeInner(config, req);
+  return { ...result, structured: null };
+}
+
+async function completeInner(
+  config: ProviderConfig,
+  req: CompletionRequest
+): Promise<Omit<CompletionResult, "structured">> {
   if (MOCK_LLM) return completeMock(req);
 
   switch (config.provider) {
@@ -74,7 +151,7 @@ const BUILD_KEYWORDS = [
   "make",
 ];
 
-async function completeMock({ system, prompt }: CompletionRequest): Promise<CompletionResult> {
+async function completeMock({ system, prompt }: CompletionRequest): Promise<Omit<CompletionResult, "structured">> {
   const text = mockResponseFor(system, prompt);
   return {
     text,
@@ -132,7 +209,7 @@ async function completeAnthropic(
   model: string,
   apiKey: string | undefined,
   { system, prompt }: CompletionRequest
-): Promise<CompletionResult> {
+): Promise<Omit<CompletionResult, "structured">> {
   const AnthropicModule = await import("@anthropic-ai/sdk");
   const Anthropic = AnthropicModule.default;
   const client = new Anthropic({ apiKey: apiKey ?? process.env.ANTHROPIC_API_KEY });
@@ -160,7 +237,7 @@ async function completeOpenAI(
   model: string,
   apiKey: string | undefined,
   { system, prompt }: CompletionRequest
-): Promise<CompletionResult> {
+): Promise<Omit<CompletionResult, "structured">> {
   const { default: OpenAI } = await import("openai");
   const client = new OpenAI({ apiKey: apiKey ?? process.env.OPENAI_API_KEY });
 
@@ -183,7 +260,7 @@ async function completeGoogle(
   model: string,
   apiKey: string | undefined,
   { system, prompt }: CompletionRequest
-): Promise<CompletionResult> {
+): Promise<Omit<CompletionResult, "structured">> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const client = new GoogleGenerativeAI((apiKey ?? process.env.GOOGLE_API_KEY)!);
   const genModel = client.getGenerativeModel({ model, systemInstruction: system });
@@ -207,7 +284,7 @@ async function completeCustom(
   apiKey: string | undefined,
   model: string,
   { system, prompt }: CompletionRequest
-): Promise<CompletionResult> {
+): Promise<Omit<CompletionResult, "structured">> {
   const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {

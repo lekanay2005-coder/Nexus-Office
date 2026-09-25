@@ -15,6 +15,17 @@ interface RoleModelRow {
 const PROVIDERS: ProviderName[] = ["anthropic", "openai", "google"];
 const BUILT_IN_PROVIDERS = new Set<string>(PROVIDERS);
 
+// The Codebuff runtime (same agent framework that powers Freebuff) is
+// offered as a per-role provider: it runs the role as a real agent with tool
+// use and structured outputs instead of a single LLM call.
+const CODEBUFF_PROVIDER = "codebuff";
+const CODEBUFF_MODELS = [
+  { model: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash (via Codebuff)" },
+  { model: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5 (via Codebuff)" },
+  { model: "openai/gpt-5-mini", label: "GPT-5 Mini (via Codebuff)" },
+  { model: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash (via Codebuff)" },
+];
+
 export default function ModelRouterPanel({
   projectId,
   initialRoleModels,
@@ -117,9 +128,12 @@ export default function ModelRouterPanel({
           {ROLES.map((role) => {
             const current = assignments[role];
             const isBuiltIn = BUILT_IN_PROVIDERS.has(current.provider);
+            const isCodebuff = current.provider === CODEBUFF_PROVIDER;
             const modelsForProvider = isBuiltIn
               ? MODEL_CATALOG.filter((m) => m.provider === current.provider)
-              : [];
+              : isCodebuff
+                ? CODEBUFF_MODELS
+                : [];
             return (
               <div
                 key={role}
@@ -138,7 +152,9 @@ export default function ModelRouterPanel({
                   onChange={(e) => {
                     const provider = e.target.value;
                     const firstModel =
-                      MODEL_CATALOG.find((m) => m.provider === provider)?.model ?? "";
+                      provider === CODEBUFF_PROVIDER
+                        ? CODEBUFF_MODELS[0].model
+                        : MODEL_CATALOG.find((m) => m.provider === provider)?.model ?? "";
                     saveAssignment(role, provider, firstModel);
                   }}
                   className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100"
@@ -149,6 +165,7 @@ export default function ModelRouterPanel({
                         {PROVIDER_LABELS[p]}
                       </option>
                     ))}
+                    <option value={CODEBUFF_PROVIDER}>Codebuff agents</option>
                   </optgroup>
                   {customIntegrationNames.length > 0 && (
                     <optgroup label="Integrations">
@@ -168,6 +185,22 @@ export default function ModelRouterPanel({
                     className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100"
                   >
                     {modelsForProvider.map((m) => (
+                      <option key={m.model} value={m.model}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : isCodebuff ? (
+                  <select
+                    value={
+                      CODEBUFF_MODELS.some((m) => m.model === current.model)
+                        ? current.model
+                        : CODEBUFF_MODELS[0].model
+                    }
+                    onChange={(e) => saveAssignment(role, CODEBUFF_PROVIDER, e.target.value)}
+                    className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100"
+                  >
+                    {CODEBUFF_MODELS.map((m) => (
                       <option key={m.model} value={m.model}>
                         {m.label}
                       </option>

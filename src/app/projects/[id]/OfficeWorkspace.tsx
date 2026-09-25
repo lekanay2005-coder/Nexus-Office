@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import ChatPanel, { type RunWithSteps } from "@/components/chat/ChatPanel";
 import CodeCanvas from "@/components/canvas/CodeCanvas";
 import ModelRouterPanel from "@/components/settings/ModelRouterPanel";
@@ -26,6 +27,8 @@ type ConnectionProvider = "github" | "vercel";
 export default function OfficeWorkspace({
   project,
   displayName,
+  avatarUrl,
+  email,
   initialRuns,
   initialFiles,
   initialMemory,
@@ -37,6 +40,8 @@ export default function OfficeWorkspace({
 }: {
   project: Project;
   displayName: string;
+  avatarUrl: string | null;
+  email: string | null;
   initialRuns: RunWithSteps[];
   initialFiles: ProjectFile[];
   initialMemory: ProjectMemory | null;
@@ -48,6 +53,7 @@ export default function OfficeWorkspace({
 }) {
   const [tab, setTab] = useState<Tab>("chat");
   const [canvasKey, setCanvasKey] = useState(0);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   // Local copy so BrandingPanel toggles (e.g. preview watermark) apply
   // immediately without a full refetch.
   const [projectState, setProjectState] = useState<Project>(project);
@@ -95,9 +101,17 @@ export default function OfficeWorkspace({
             Settings
           </TabButton>
         </nav>
-        <Link href="/prompts" className="text-sm text-neutral-500 hover:text-neutral-300">
+        <Link href="/prompts" className="text-sm text-neutral-500 hover:text-neutral-200">
           Prompt Vault
         </Link>
+        <UserAvatarMenu
+          displayName={displayName}
+          avatarUrl={avatarUrl}
+          email={email ?? ""}
+          open={avatarMenuOpen}
+          onToggle={() => setAvatarMenuOpen((v) => !v)}
+          onClose={() => setAvatarMenuOpen(false)}
+        />
       </header>
 
       <main className="min-h-0 flex-1 overflow-y-auto">
@@ -185,7 +199,91 @@ function TabButton({
         active ? "bg-[var(--role-strategist)] text-white" : "text-neutral-400 hover:text-neutral-200"
       }`}
     >
-      {children}
+       {children}
     </button>
+  );
+}
+
+function UserAvatarMenu({
+  displayName,
+  avatarUrl,
+  email,
+  open,
+  onToggle,
+  onClose,
+}: {
+  displayName: string;
+  avatarUrl: string | null;
+  email: string;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}) {
+  const initials =
+    (displayName || email)
+      .split(/[\s@]/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase())
+      .join("") || "U";
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        onClick={onToggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-800 text-xs font-bold text-neutral-200 hover:bg-neutral-700 focus:outline-2 focus:outline-offset-2 focus:outline-[var(--role-strategist)]"
+      >
+        {avatarUrl ? (
+          <Image
+            src={avatarUrl}
+            alt={displayName || "Your avatar"}
+            width={32}
+            height={32}
+            className="h-full w-full rounded-full object-cover"
+          />
+        ) : (
+          initials
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={onClose}
+            aria-hidden="true"
+          />
+          <div
+            role="menu"
+            className="absolute top-10 right-0 z-20 w-48 rounded-lg border border-neutral-800 bg-neutral-900 py-1 shadow-xl"
+          >
+            <div className="px-3 py-2 text-xs text-neutral-500">
+              {displayName && <div className="font-medium text-neutral-200">{displayName}</div>}
+              {email && <div className="truncate">{email}</div>}
+            </div>
+            <Link
+              href="/account/profile"
+              onClick={onClose}
+              className="block px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+              role="menuitem"
+            >
+              Profile
+            </Link>
+            <form action="/auth/signout" method="post" className="m-0">
+              <button
+                type="submit"
+                onClick={onClose}
+                className="w-full px-3 py-1.5 text-left text-sm text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                role="menuitem"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

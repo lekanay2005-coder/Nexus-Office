@@ -23,7 +23,7 @@ export async function GET(
   return NextResponse.json({ roleModels });
 }
 
-const BUILT_IN_PROVIDERS = ["anthropic", "openai", "google"];
+const BUILT_IN_PROVIDERS = ["anthropic", "openai", "google", "codebuff"];
 
 // Body: { role: Role, provider: ProviderName | integration name, model: string }
 export async function PUT(

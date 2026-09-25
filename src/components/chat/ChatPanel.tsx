@@ -35,6 +35,9 @@ export default function ChatPanel({
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Live progress line from Codebuff-backed roles (e.g. "builder →
+  // project_read_file(src/app/page.tsx)") shown while a run is in flight.
+  const [roleEvent, setRoleEvent] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -145,7 +148,10 @@ export default function ChatPanel({
               )
             );
             setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          } else if (event.type === "role_event") {
+            setRoleEvent(`${event.role}: ${event.message}`);
           } else if (event.type === "done") {
+            setRoleEvent(null);
             setRuns((prev) =>
               prev.map((r) => (r.id === currentRunId ? { ...r, mode: event.mode, status: "complete" } : r))
             );
@@ -163,6 +169,7 @@ export default function ChatPanel({
       );
     } finally {
       setPending(false);
+      setRoleEvent(null);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }
   }
@@ -213,6 +220,10 @@ export default function ChatPanel({
         ))}
         <div ref={bottomRef} />
       </div>
+
+      {pending && roleEvent && (
+        <p className="px-4 pb-1 text-xs text-neutral-500">{roleEvent}</p>
+      )}
 
       {error && <p className="px-4 pb-1 text-xs text-red-400">{error}</p>}
 

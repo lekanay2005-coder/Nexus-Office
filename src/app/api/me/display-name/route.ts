@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrCreateProfile, sanitizeDisplayName } from "@/lib/profile";
 
 // Addendum 9 Phase 1: display-name identity.
+// Addendum 10 Phase 3: also returns avatar_url, email, GitHub metadata, and
+// account created_at so the profile page can show full account info.
 
 export async function GET() {
   const supabase = await createClient();
@@ -14,8 +16,17 @@ export async function GET() {
   const profile = await getOrCreateProfile(supabase, user.id);
   return NextResponse.json({
     displayName: profile.display_name,
+    avatarUrl: profile.avatar_url,
     // One-time naming prompt: shown until the user picks a name (or skips).
     needsDisplayName: profile.display_name.length === 0,
+    // Account metadata for the profile page.
+    email: user.email ?? null,
+    githubLogin: (user.app_metadata as Record<string, unknown>)?.provider === "github"
+      ? ((user.user_metadata as Record<string, unknown>)?.user_name ??
+        (user.user_metadata as Record<string, unknown>)?.preferred_username ??
+        null)
+      : null,
+    memberSince: user.created_at ?? profile.created_at,
   });
 }
 

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ROLES, type ProjectMemory, type Role } from "@/types/db";
-import { complete, DEFAULT_PROVIDER_CONFIG, type ProviderConfig, type ProviderName } from "@/lib/providers";
+import { completeWithResilience as complete, DEFAULT_PROVIDER_CONFIG, type CompletionResult, type ProviderConfig, type ProviderName } from "@/lib/providers";
 import { ROLE_SYSTEM_PROMPTS } from "@/lib/pipeline/roles";
 import {
   formatMemoryForPrompt,
@@ -13,6 +13,7 @@ import { decryptSecret } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
 import { assertRoleAllowed } from "@/lib/capabilities";
 import { getIntegrationApiKey } from "@/lib/secrets";
+import { runRoleAgent, isCodebuffProvider } from "@/lib/agents/codebuff";
 import { randomUUID } from "crypto";
 
 export interface PipelineStepResult {
@@ -44,6 +45,9 @@ interface RunPipelineArgs {
   // (the API route) can push it to the client without waiting for the rest
   // of the pipeline to finish.
   onStep?: (step: PipelineStepResult) => void;
+  // Invoked when a Codebuff-backed role reports mid-run activity (tool calls,
+  // recoverable errors), so the chat UI can show live progress.
+  onRoleEvent?: (event: { role: Role; message: string }) => void;
 }
 
 export async function runPipeline({
@@ -53,6 +57,7 @@ export async function runPipeline({
   userMessage,
   roleConfig,
   onStep,
+  onRoleEvent: sendRoleEvent,
 }: RunPipelineArgs): Promise<PipelineRunResult> {
   const memory = await loadMemory(supabase, projectId);
   const memoryText = formatMemoryForPrompt(memory);
@@ -92,10 +97,21 @@ export async function runPipeline({
     // --- Step 1: Strategist decides route ---
     const strategistConfig = effectiveRoleConfig.strategist ?? DEFAULT_PROVIDER_CONFIG;
     const strategistPrompt = `${memoryText}\n\nUSER MESSAGE:\n${userMessage}`;
-    const strategistResult = await complete(strategistConfig, {
-      system: ROLE_SYSTEM_PROMPTS.strategist,
-      prompt: strategistPrompt,
-    });
+    const strategistResult = isCodebuffProvider(strategistConfig.provider)
+      ? await runRoleViaCodebuff({
+          supabase,
+          projectId,
+          userId,
+          runId: run.id,
+          role: "strategist",
+          prompt: strategistPrompt,
+          config: strategistConfig,
+          onEvent: (message) => sendRoleEvent?.({ role: "strategist", message }),
+        })
+      : { ...(await complete(strategistConfig, {
+          system: ROLE_SYSTEM_PROMPTS.strategist,
+          prompt: strategistPrompt,
+        })), structured: null };
 
     const strategistStep = await persistStep(supabase, run.id, {
       role: "strategist",
@@ -123,7 +139,15 @@ export async function runPipeline({
       },
     });
 
-    const { needsFullPipeline, direction } = parseStrategistOutput(strategistResult.text);
+    // The Codebuff strategist returns structured output directly; the plain
+    // LLM path falls back to fenced-block parsing.
+    const { needsFullPipeline, direction } =
+      isCodebuffProvider(strategistConfig.provider) && strategistResult.structured
+        ? {
+            needsFullPipeline: Boolean(strategistResult.structured.needs_full_pipeline),
+            direction: String(strategistResult.structured.direction ?? ""),
+          }
+        : parseStrategistOutput(strategistResult.text);
     const rolesToRun: Role[] = needsFullPipeline
       ? ["builder", "analyst", "qa", "ops"]
       : ["ops"];
@@ -132,14 +156,32 @@ export async function runPipeline({
     const priorOutputs: Partial<Record<Role, string>> = { strategist: direction };
     let stepOrder = 2;
 
+    const structuredByRole: Partial<Record<Role, Record<string, unknown>>> = {};
+
     for (const role of rolesToRun) {
       const config = effectiveRoleConfig[role] ?? DEFAULT_PROVIDER_CONFIG;
       const prompt = buildRolePrompt(memoryText, userMessage, priorOutputs);
 
-      const result = await complete(config, {
-        system: ROLE_SYSTEM_PROMPTS[role],
-        prompt,
-      });
+      // Roles routed to "codebuff" run as real Codebuff agents (the same
+      // runtime that powers Freebuff): tool use, structured outputs, retries.
+      // Everything else keeps the plain single-shot provider call.
+      const result = isCodebuffProvider(config.provider)
+        ? await runRoleViaCodebuff({
+            supabase,
+            projectId,
+            userId,
+            runId: run.id,
+            role,
+            prompt,
+            config,
+            onEvent: (message) => sendRoleEvent?.({ role, message }),
+          })
+        : await complete(config, {
+            system: ROLE_SYSTEM_PROMPTS[role],
+            prompt,
+          });
+
+      if (result.structured) structuredByRole[role] = result.structured;
 
       const step = await persistStep(supabase, run.id, {
         role,
@@ -204,8 +246,20 @@ export async function runPipeline({
     }
 
     const opsOutput = priorOutputs.ops ?? "";
-    const memoryUpdate = extractMemoryUpdate(opsOutput);
-    const finalMessage = stripMemoryBlock(opsOutput);
+    // Prefer the structured Ops payload from the Codebuff path; fall back to
+    // fenced-block parsing for the plain provider path.
+    const opsStructured = structuredByRole.ops;
+    const memoryUpdate = opsStructured
+      ? {
+          decisions: toStringArray(opsStructured.decisions),
+          open_issues: toStringArray(opsStructured.open_issues),
+          tech_stack: toStringArray(opsStructured.tech_stack),
+        }
+      : extractMemoryUpdate(opsOutput);
+    const finalMessage =
+      opsStructured && typeof opsStructured.text === "string"
+        ? opsStructured.text
+        : stripMemoryBlock(opsOutput);
     const mode = needsFullPipeline ? "pipeline" : "direct";
 
     // Every run ends with Ops and updates memory before returning, whether
@@ -343,6 +397,68 @@ async function loadMemory(supabase: SupabaseClient, projectId: string): Promise<
   }
 
   return created as ProjectMemory;
+}
+
+const CODEBUFF_PROVIDER = "codebuff";
+
+// Runs one role through the Codebuff agent runtime and normalizes the result
+// to the same shape the plain provider path returns. The role's api_keys row
+// for "codebuff" (Model Router settings) wins over the server env key.
+async function runRoleViaCodebuff(args: {
+  supabase: SupabaseClient;
+  projectId: string;
+  userId: string;
+  runId: string;
+  role: Role;
+  prompt: string;
+  config: ProviderConfig;
+  onEvent: (message: string) => void;
+}): Promise<CompletionResult & { structured: Record<string, unknown> | null }> {
+  const { supabase, projectId, userId, runId, role, prompt, config, onEvent } = args;
+  const apiKey = config.apiKey ?? process.env.CODEBUFF_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Codebuff provider selected but no API key configured. Save a Codebuff key in Model Router settings or set CODEBUFF_API_KEY on the server."
+    );
+  }
+
+  try {
+    const agentResult = await runRoleAgent({
+      role,
+      prompt,
+      codebuffApiKey: apiKey,
+      supabase,
+      projectId,
+      onEvent: (event) => {
+        if (event.type === "tool_call") onEvent(event.message);
+      },
+      onCapabilityDenied: () => {
+        void logAudit(supabase, {
+          projectId,
+          userId,
+          actor: "system",
+          action: "capability.denied",
+          target: `${role}/read_files`,
+          metadata: { runId },
+        });
+      },
+    });
+    return { text: agentResult.text, tokensIn: agentResult.tokensIn, tokensOut: agentResult.tokensOut, structured: agentResult.data };
+  } catch (err) {
+    await logAudit(supabase, {
+      projectId,
+      userId,
+      actor: role,
+      action: "pipeline.step",
+      target: runId,
+      metadata: { provider: CODEBUFF_PROVIDER, error: err instanceof Error ? err.message : String(err) },
+    });
+    throw err;
+  }
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
 function buildRolePrompt(

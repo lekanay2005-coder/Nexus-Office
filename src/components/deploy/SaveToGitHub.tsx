@@ -113,6 +113,7 @@ export default function SaveToGitHub({
               setBrowsing(false);
             }}
             onClose={() => setBrowsing(false)}
+            onReconnect={handleReconnect}
           />
         )}
 

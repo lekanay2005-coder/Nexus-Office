@@ -1,8 +1,10 @@
 // Shared "Matrix code rain" engine for the Nexus Office brand background.
 // One <canvas>, requestAnimationFrame, no external library. Used by:
 // - <HackerBackground /> (full-viewport ambient layer, mounted in root layout)
-// - <HackerGlow />       (dense, brighter halo behind the logo mark)
 //
+// HackerGlow used to use this engine too but was replaced with a pure-CSS
+// blur halo (see HackerGlow.tsx) so no canvas ever renders inside a logo.
+
 // Contract:
 // - ~30fps cap (background ambiance, doesn't need 60)
 // - paused via cancelAnimationFrame while document.hidden

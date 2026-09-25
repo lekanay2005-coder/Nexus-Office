@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { injectWatermark } from "@/lib/brand";
 import type { ProjectFile } from "@/types/db";
+
+const fileCache = new Map<string, { files: ProjectFile[]; timestamp: number }>();
+const CACHE_TTL = 15_000;
 
 function languageForPath(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
@@ -30,7 +33,16 @@ export default function CodeCanvas({
   initialFiles: ProjectFile[];
   showWatermark?: boolean;
 }) {
-  const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
+  // On first mount (initial page load) prefer the client-side cache when it's
+  // still fresh, skipping a redundant refetch after a recent visit. Computed
+  // in the lazy initializer instead of an effect, so there's no cascading
+  // setState pass. Later mounts (e.g. parent bumps the key after a pipeline
+  // run) fall through to the fetch effect below.
+  const [files, setFiles] = useState<ProjectFile[]>(() => {
+    const cached = fileCache.get(projectId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.files;
+    return initialFiles;
+  });
   const [selectedPath, setSelectedPath] = useState<string | null>(initialFiles[0]?.path ?? null);
   const [draft, setDraft] = useState<string>(initialFiles[0]?.content ?? "");
   const [saving, setSaving] = useState(false);
@@ -52,6 +64,7 @@ export default function CodeCanvas({
     const data = await res.json();
     const nextFiles: ProjectFile[] = data.files ?? [];
     setFiles(nextFiles);
+    fileCache.set(projectId, { files: nextFiles, timestamp: Date.now() });
     const stillSelected = nextFiles.find((f) => f.path === selectedPath);
     if (stillSelected) {
       setDraft(stillSelected.content);
@@ -77,11 +90,13 @@ export default function CodeCanvas({
   }
 
   useEffect(() => {
-    // Refetch whenever the canvas remounts (parent bumps its key after a
-    // pipeline run writes new files) so the Builder's output shows up
-    // without a manual refresh.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshFiles();
+    // Always refetch on mount when this isn't a fresh first load — e.g. the
+    // parent bumps the key after a pipeline run to pick up new server files.
+    // The cache read for first load happens in the files initializer above.
+    // Deferred to a microtask so the effect body itself stays setState-free.
+    if (files === initialFiles || fileCache.has(projectId)) {
+      void Promise.resolve().then(() => refreshFiles());
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

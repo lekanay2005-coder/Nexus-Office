@@ -31,6 +31,6 @@ export async function getOrCreateProfile(
     .insert({ id: userId, display_name: "" })
     .select()
     .single();
-  if (error) throw new Error(error.message);
+   if (error) throw new Error(error.message);
   return created as Profile;
 }

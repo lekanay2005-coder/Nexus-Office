@@ -40,6 +40,9 @@ export default async function ProjectsPage() {
             <Link href="/prompts" className="text-sm text-neutral-400 hover:text-neutral-200">
               Prompt Vault
             </Link>
+            <Link href="/account/profile" className="text-sm text-neutral-400 hover:text-neutral-200">
+              Account
+            </Link>
             <form action="/auth/signout" method="post">
               <SignOutButton />
             </form>

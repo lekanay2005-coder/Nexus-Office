@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { encryptSecret } from "@/lib/crypto";
 import { setUserProviderKey, deleteUserProviderKey } from "@/lib/secrets";
 
-const PROVIDERS = ["anthropic", "openai", "google", "github", "vercel"] as const;
+const PROVIDERS = ["anthropic", "openai", "google", "codebuff", "github", "vercel"] as const;
 
 // Returns which providers have a key saved — never the key itself. The
 // union of the legacy api_keys rows and the secrets vault entries, so a

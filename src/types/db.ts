@@ -123,9 +123,11 @@ export interface Prompt {
 }
 
 // Addendum 9: per-user profile (display name shown instead of email).
+// Addendum 10: avatar_url for the profile page.
 export interface Profile {
   id: string;
   display_name: string;
+  avatar_url: string | null;
   created_at: string;
   updated_at: string;
 }

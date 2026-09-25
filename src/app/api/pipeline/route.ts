@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { runPipeline, type PipelineStepResult } from "@/lib/pipeline/run";
+import { perfTimer } from "@/lib/perf";
 
 // Streams each role's step to the client as soon as it completes (SSE),
 // so the chat UI can render cards in sequence instead of waiting for the
@@ -41,13 +42,18 @@ export async function POST(req: Request) {
       }
 
       try {
+        const timer = perfTimer("pipeline.run");
         const result = await runPipeline({
           supabase,
           projectId,
           userId: user.id,
           userMessage: message,
           onStep: (step: PipelineStepResult) => send({ type: "step", step }),
+          // Live progress from Codebuff-backed roles (tool calls, retries) —
+          // rendered as a transient status line in the chat UI.
+          onRoleEvent: (event) => send({ type: "role_event", role: event.role, message: event.message }),
         });
+        timer.end();
         send({
           type: "done",
           runId: result.runId,

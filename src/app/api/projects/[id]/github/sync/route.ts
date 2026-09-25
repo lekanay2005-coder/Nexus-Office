@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { planGitHubSync, applyGitHubSync, buildCommitMessage } from "@/lib/deploy/githubSync";
 import { getRequireApproval, assertCapability, CapabilityError } from "@/lib/capabilities";
 import { logAudit } from "@/lib/audit";
+import { perfTimer } from "@/lib/perf";
 
 // Body: { resolutions?: Record<path, "mine" | "theirs">, confirmed?: boolean }
 //
@@ -103,7 +104,9 @@ export async function POST(
       );
     }
 
+    const timer = perfTimer("github.sync");
     const result = await applyGitHubSync({ supabase, projectId: id, userId: user.id, resolutions });
+    timer.end();
 
     await logAudit(supabase, {
       projectId: id,

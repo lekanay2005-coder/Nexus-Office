@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import OfficeWorkspace from "./OfficeWorkspace";
 import SetupRequired from "@/components/SetupRequired";
 import { getOrCreateProfile } from "@/lib/profile";
+import { perfTimer } from "@/lib/perf";
 
 export default async function ProjectPage({
   params,
@@ -30,53 +31,32 @@ export default async function ProjectPage({
   // workspace renders even if the profiles table hasn't been migrated yet.
   const profile = await getOrCreateProfile(supabase, user.id).catch(() => null);
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("id", id)
-    .single();
+  // Parallelize all independent reads — the previous code awaited them
+  // one-by-one, adding unnecessary round-trip latency on project load.
+  const timer = perfTimer("project.load");
+  const [projectRes, runsRes, filesRes, memoryRes, roleModelsRes, apiKeysRes, deploysRes, integrationsRes] =
+    await Promise.all([
+      supabase.from("projects").select("*").eq("id", id).single(),
+      supabase.from("pipeline_runs").select("*, pipeline_steps(*)").eq("project_id", id).order("created_at", { ascending: true }),
+      supabase.from("files").select("*").eq("project_id", id).order("path", { ascending: true }),
+      supabase.from("project_memory").select("*").eq("project_id", id).maybeSingle(),
+      supabase.from("role_models").select("*").eq("project_id", id),
+      supabase.from("api_keys").select("provider").eq("user_id", user.id),
+      supabase.from("deploys").select("*").eq("project_id", id).order("created_at", { ascending: false }),
+      supabase.from("integrations").select("id, project_id, type, name, base_url, extra_config, created_at").eq("project_id", id).order("created_at", { ascending: true }),
+    ]);
+  timer.end();
 
+  const project = projectRes.data;
   if (!project) redirect("/projects");
 
-  const { data: runs } = await supabase
-    .from("pipeline_runs")
-    .select("*, pipeline_steps(*)")
-    .eq("project_id", id)
-    .order("created_at", { ascending: true });
-
-  const { data: files } = await supabase
-    .from("files")
-    .select("*")
-    .eq("project_id", id)
-    .order("path", { ascending: true });
-
-  const { data: memory } = await supabase
-    .from("project_memory")
-    .select("*")
-    .eq("project_id", id)
-    .maybeSingle();
-
-  const { data: roleModels } = await supabase
-    .from("role_models")
-    .select("*")
-    .eq("project_id", id);
-
-  const { data: apiKeys } = await supabase
-    .from("api_keys")
-    .select("provider")
-    .eq("user_id", user.id);
-
-  const { data: deploys } = await supabase
-    .from("deploys")
-    .select("*")
-    .eq("project_id", id)
-    .order("created_at", { ascending: false });
-
-  const { data: integrations } = await supabase
-    .from("integrations")
-    .select("id, project_id, type, name, base_url, extra_config, created_at")
-    .eq("project_id", id)
-    .order("created_at", { ascending: true });
+  const { data: runs } = runsRes;
+  const { data: files } = filesRes;
+  const { data: memory } = memoryRes;
+  const { data: roleModels } = roleModelsRes;
+  const { data: apiKeys } = apiKeysRes;
+  const { data: deploys } = deploysRes;
+  const { data: integrations } = integrationsRes;
 
   const configuredProviders = (apiKeys ?? []).map((k) => k.provider);
 
@@ -84,6 +64,8 @@ export default async function ProjectPage({
     <OfficeWorkspace
       project={project}
       displayName={profile?.display_name ?? ""}
+      avatarUrl={profile?.avatar_url ?? null}
+      email={user.email ?? null}
       initialRuns={runs ?? []}
       initialFiles={files ?? []}
       initialMemory={memory}

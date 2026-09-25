@@ -24,9 +24,11 @@ type ErrorState = { kind: "reconnect" } | { kind: "message"; message: string };
 export default function RepoPicker({
   onPick,
   onClose,
+  onReconnect,
 }: {
   onPick: (fullName: string) => void;
   onClose: () => void;
+  onReconnect?: () => void;
 }) {
   const [owners, setOwners] = useState<Owner[] | null>(null);
   const [activeOwner, setActiveOwner] = useState<string>("");
@@ -194,17 +196,31 @@ export default function RepoPicker({
       </div>
 
       {error?.kind === "reconnect" && (
-        <ReconnectHint onClose={onClose} />
+        <ReconnectHint onReconnect={onReconnect} onClose={onClose} />
       )}
     </div>
   );
 }
 
-function ReconnectHint({ onClose }: { onClose: () => void }) {
+function ReconnectHint({ onReconnect, onClose }: { onReconnect?: () => void; onClose: () => void }) {
+  if (onReconnect) {
+    return (
+      <div className="rounded bg-amber-600/10 p-2 text-xs text-amber-300">
+        Your GitHub connection is missing or expired.{" "}
+        <button
+          onClick={onReconnect}
+          className="font-medium underline decoration-dotted underline-offset-1"
+        >
+          Reconnect GitHub
+        </button>{" "}
+        — this will open the GitHub OAuth flow and resume right here once done.
+      </div>
+    );
+  }
   return (
     <div className="rounded bg-amber-600/10 p-2 text-xs text-amber-300">
-      Your GitHub connection is missing or expired. Reconnect from Deploy
-      Desk&apos;s Save to GitHub panel first.{" "}
+      Your GitHub connection is missing or expired. Reconnect from Deploy Desk&apos;s
+      Save to GitHub panel first.{" "}
       <button onClick={onClose} className="underline">
         Close picker
       </button>
