@@ -11,6 +11,7 @@ export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [editing, setEditing] = useState<Prompt | "new" | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [visibilityToggling, setVisibilityToggling] = useState<string | null>(null);
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -44,6 +45,27 @@ export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt
       const exists = prev.some((p) => p.id === prompt.id);
       return exists ? prev.map((p) => (p.id === prompt.id ? prompt : p)) : [prompt, ...prev];
     });
+  }
+
+  // Addendum 13 section 4: toggling visibility updates the vault JSON in the
+  // user's GitHub repo AND the public_prompts Explore cache (server does
+  // both); we only reflect the new state locally.
+  async function handleToggleVisibility(prompt: Prompt) {
+    if (visibilityToggling) return;
+    const next = prompt.visibility === "public" ? "private" : "public";
+    setVisibilityToggling(prompt.id);
+    const res = await fetch(`/api/prompts/${prompt.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visibility: next }),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.prompt) {
+      upsertLocal(data.prompt);
+    } else if (data?.vaultError) {
+      alert(`Saved, but the GitHub vault sync failed: ${data.vaultError}`);
+    }
+    setVisibilityToggling(null);
   }
 
   return (
@@ -107,7 +129,30 @@ export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt
               className="rounded-lg border border-neutral-800 bg-neutral-900 p-4"
             >
               <div className="mb-1 flex items-start justify-between gap-2">
-                <h3 className="font-medium">{prompt.title}</h3>
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="font-medium">{prompt.title}</h3>
+                  {/* Addendum 13: public/private toggle — public prompts appear
+                      on the /explore World Board. */}
+                  <button
+                    onClick={() => handleToggleVisibility(prompt)}
+                    title={
+                      prompt.visibility === "public"
+                        ? "Public — visible on Explore. Click to make private."
+                        : "Private. Click to share on Explore."
+                    }
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      prompt.visibility === "public"
+                        ? "bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600/40"
+                        : "bg-neutral-800 text-neutral-500 hover:bg-neutral-700"
+                    }`}
+                  >
+                    {visibilityToggling === prompt.id
+                      ? "…"
+                      : prompt.visibility === "public"
+                        ? "Public"
+                        : "Private"}
+                  </button>
+                </div>
                 <div className="flex shrink-0 gap-2 text-xs">
                   <button
                     onClick={() => handleCopy(prompt)}

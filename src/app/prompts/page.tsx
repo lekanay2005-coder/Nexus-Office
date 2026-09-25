@@ -22,5 +22,9 @@ export default async function PromptsPage() {
     .select("*")
     .order("updated_at", { ascending: false });
 
-  return <PromptVault initialPrompts={prompts ?? []} />;
+  return (
+    <div data-tour="prompt-vault">
+      <PromptVault initialPrompts={prompts ?? []} />
+    </div>
+  );
 }

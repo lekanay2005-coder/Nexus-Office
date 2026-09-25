@@ -18,6 +18,7 @@ import MemoryBoard from "@/components/memory/MemoryBoard";
 import CostMeter from "@/components/cost/CostMeter";
 import AuditLog from "@/components/governance/AuditLog";
 import PermissionsPanel from "@/components/governance/PermissionsPanel";
+import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import type { Deploy, Integration, Project, ProjectFile, ProjectMemory, Role } from "@/types/db";
 import type { ProviderName } from "@/lib/providers";
 
@@ -67,6 +68,8 @@ export default function OfficeWorkspace({
       {/* Addendum 9: one-time "What should we call you?" prompt — shows until
           a display name is saved (skipping defers it to the next visit). */}
       {displayName === "" && <DisplayNamePrompt />}
+      {/* Addendum 13: tour re-runnable from inside the workspace via "?". */}
+      <OnboardingTour autoStart={false} />
       <header className="glass-panel flex items-center justify-between border-x-0 border-t-0 px-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <NexusLogo surface="nav" className="shrink-0" />
@@ -116,7 +119,7 @@ export default function OfficeWorkspace({
 
       <main className="min-h-0 flex-1 overflow-y-auto">
         {tab === "chat" && (
-          <div className="mx-auto h-full max-w-3xl">
+          <div className="mx-auto h-full max-w-3xl" data-tour="office-chat">
             <ChatPanel
               projectId={project.id}
               initialRuns={initialRuns}
@@ -125,26 +128,32 @@ export default function OfficeWorkspace({
           </div>
         )}
         {tab === "canvas" && (
-          <CodeCanvas
-            key={canvasKey}
-            projectId={projectState.id}
-            initialFiles={initialFiles}
-            showWatermark={projectState.show_preview_watermark}
-          />
+          <div data-tour="code-canvas">
+            <CodeCanvas
+              key={canvasKey}
+              projectId={projectState.id}
+              initialFiles={initialFiles}
+              showWatermark={projectState.show_preview_watermark}
+            />
+          </div>
         )}
         {tab === "memory" && (
-          <MemoryBoard
-            projectId={project.id}
-            initialMemory={initialMemory}
-            displayName={displayName}
-          />
+          <div data-tour="memory-audit">
+            <MemoryBoard
+              projectId={project.id}
+              initialMemory={initialMemory}
+              displayName={displayName}
+            />
+          </div>
         )}
         {tab === "deploy" && (
-          <DeployDesk
-            project={projectState}
-            initialDeploys={initialDeploys}
-            hostingIntegrations={initialIntegrations.filter((i) => i.type === "hosting")}
-          />
+          <div data-tour="deploy-desk">
+            <DeployDesk
+              project={projectState}
+              initialDeploys={initialDeploys}
+              hostingIntegrations={initialIntegrations.filter((i) => i.type === "hosting")}
+            />
+          </div>
         )}
         {tab === "cost" && <CostMeter projectId={project.id} />}
         {tab === "audit" && (
@@ -162,14 +171,16 @@ export default function OfficeWorkspace({
             <div className="mx-auto max-w-2xl px-6">
               <BrandingPanel project={projectState} onChanged={applyProjectPatch} />
             </div>
-            <ModelRouterPanel
-              projectId={project.id}
-              initialRoleModels={initialRoleModels}
-              initialApiKeyProviders={initialApiKeyProviders}
-              customIntegrationNames={initialIntegrations
-                .filter((i) => i.type === "ai_provider")
-                .map((i) => i.name)}
-            />
+            <div data-tour="model-router">
+              <ModelRouterPanel
+                projectId={project.id}
+                initialRoleModels={initialRoleModels}
+                initialApiKeyProviders={initialApiKeyProviders}
+                customIntegrationNames={initialIntegrations
+                  .filter((i) => i.type === "ai_provider")
+                  .map((i) => i.name)}
+              />
+            </div>
             <div className="mx-auto max-w-2xl px-6">
               <ConnectionsPanel initialConfigured={initialConnectionProviders} />
             </div>

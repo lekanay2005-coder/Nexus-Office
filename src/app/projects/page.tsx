@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import NewProjectForm from "./NewProjectForm";
+import RepoImportPicker from "@/components/projects/RepoImportPicker";
+import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import SetupRequired from "@/components/SetupRequired";
 import NexusLogo from "@/components/brand/NexusLogo";
 
@@ -27,6 +28,9 @@ export default async function ProjectsPage() {
 
   return (
     <div className="min-h-screen px-6 py-10 text-neutral-100">
+      {/* Addendum 13: first-time walkthrough (auto-starts once, re-runnable
+          via the floating "?" button the component always renders). */}
+      <OnboardingTour autoStart />
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -49,9 +53,11 @@ export default async function ProjectsPage() {
           </div>
         </div>
 
-        <NewProjectForm />
+        {/* Addendum 13: GitHub repo/org picker is the only way to create a
+            project now — in-app repo creation was removed. */}
+        <RepoImportPicker />
 
-        <ul className="mt-8 space-y-2">
+        <ul className="mt-8 space-y-2" data-tour="projects-list">
           {(projects ?? []).map((p) => (
             <li key={p.id}>
               <Link
@@ -67,7 +73,7 @@ export default async function ProjectsPage() {
           ))}
           {(!projects || projects.length === 0) && (
             <li className="text-sm text-neutral-500">
-              No projects yet. Create one above to open the Office.
+              No projects yet. Connect a repo above to open the Office.
             </li>
           )}
         </ul>

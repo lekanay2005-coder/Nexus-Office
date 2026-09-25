@@ -118,16 +118,23 @@ export interface Prompt {
   title: string;
   body: string;
   tags: string[];
+  // Addendum 13: public prompts feed the /explore World Board.
+  visibility: PromptVisibility;
   created_at: string;
   updated_at: string;
 }
 
 // Addendum 9: per-user profile (display name shown instead of email).
 // Addendum 10: avatar_url for the profile page.
+// Addendum 13: onboarding_completed gates the auto-start product tour.
 export interface Profile {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  onboarding_completed: boolean;
   created_at: string;
   updated_at: string;
 }
+
+// Addendum 13: prompt visibility (Prompt Vault / Explore board).
+export type PromptVisibility = "private" | "public";

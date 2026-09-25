@@ -33,7 +33,6 @@ export default function ChatPanel({
   onFilesChanged?: () => void;
 }) {
   const [runs, setRuns] = useState<RunWithSteps[]>(initialRuns);
-  const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Live progress line from Codebuff-backed roles (e.g. "builder →
@@ -46,7 +45,23 @@ export default function ChatPanel({
     limit: number | null;
     resetAt: string | null;
   } | null>(null);
+  // Addendum 13: "Use this prompt" from the Explore board stages a message
+  // in localStorage under this key; prefill the composer when present.
+  // Lazily initialized so no setState-in-effect cascade happens.
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState(() => {
+    try {
+      const pending = localStorage.getItem("nexus-pending-prompt");
+      if (pending) {
+        const parsed = JSON.parse(pending) as { title: string; body: string };
+        localStorage.removeItem("nexus-pending-prompt");
+        return `${parsed.title}\n\n${parsed.body}`;
+      }
+    } catch {
+      localStorage.removeItem("nexus-pending-prompt");
+    }
+    return "";
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

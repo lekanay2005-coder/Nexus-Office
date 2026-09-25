@@ -7,10 +7,13 @@ import type { SyncConflict } from "@/lib/deploy/githubSync";
 import RepoPicker from "./RepoPicker";
 
 type Status =
-  | { kind: "idle" }
+  | { kind: "idle"; validating?: boolean }
   | { kind: "reconnect" }
   | { kind: "conflicts"; conflicts: SyncConflict[] }
   | { kind: "success"; url: string }
+  // Addendum 13 section 5: pre-push validation failed and couldn't be
+  // auto-fixed — surfaced with the exact issues instead of a silent skip.
+  | { kind: "validation_failed"; message: string }
   | { kind: "error"; message: string };
 
 export default function SaveToGitHub({
@@ -35,8 +38,10 @@ export default function SaveToGitHub({
 
   async function handleSave(withResolutions?: Record<string, "mine" | "theirs">) {
     setSaving(true);
-    setStatus({ kind: "idle" });
+    setStatus({ kind: "idle", validating: true });
 
+    // Addendum 13 section 5: show the validation step explicitly — the user
+    // should understand a check is happening, not just a delay.
     const { res, data } = await fetchWithApproval(`/api/projects/${projectId}/github/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -50,6 +55,8 @@ export default function SaveToGitHub({
     }
     if (!res.ok) {
       if (data.error === "RECONNECT_GITHUB") setStatus({ kind: "reconnect" });
+      else if (data.status === "validation_failed")
+        setStatus({ kind: "validation_failed", message: data.message as string });
       else setStatus({ kind: "error", message: (data.error as string) ?? "Save failed" });
       return;
     }
@@ -122,8 +129,25 @@ export default function SaveToGitHub({
           disabled={saving || !githubRepo}
           className="w-full rounded-md bg-[var(--role-strategist)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Save to GitHub"}
+          {saving ? "Validating, then pushing…" : "Save to GitHub"}
         </button>
+
+        {saving && (
+          <p className="text-xs text-neutral-500" aria-live="polite">
+            Validating files before push…
+          </p>
+        )}
+
+        {status.kind === "validation_failed" && (
+          <div className="rounded border border-red-900/60 bg-red-950/30 p-3 text-xs">
+            <p className="font-medium text-red-300">Push blocked — validation failed</p>
+            <p className="mt-1 leading-relaxed text-red-200/90">{status.message}</p>
+            <p className="mt-1 text-red-200/60">
+              Fix the flagged files in Code Canvas (or ask Office Chat to fix them),
+              then push again.
+            </p>
+          </div>
+        )}
 
         {status.kind === "reconnect" && (
           <div className="rounded bg-amber-600/10 p-2 text-xs text-amber-300">
