@@ -78,10 +78,14 @@ though the build succeeded. Current migrations: `0001_init.sql` through
 
 ### Bundle-external native/WASM dependencies
 
-`@codebuff/sdk` is listed in `serverExternalPackages` (`next.config.ts`) — its
-WASM loaders cannot be bundled. If a future dependency adds native or WASM
-modules, it likely needs the same treatment, or the build fails with
-`Module not found: Can't resolve 'GOT.mem' / 'env'` style errors.
+`@codebuff/sdk` requires `serverExternalPackages` config in `next.config.ts` —
+do not import it (directly or via `@/lib/agents/codebuff`) in client
+components. Its tree-sitter WASM dependencies (`@vscode/tree-sitter-wasm`)
+cannot be bundled; webpack fails with `Module not found: Can't resolve
+'GOT.mem' / 'env'` errors if it tries. The SDK is only imported from
+`src/lib/agents/codebuff.ts` → `src/lib/pipeline/run.ts` → the
+`/api/pipeline` route (all server-side). If a future dependency adds native
+or WASM modules, it likely needs the same `serverExternalPackages` treatment.
 
 ### Post-deploy verification
 
