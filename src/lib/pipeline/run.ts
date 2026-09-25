@@ -14,6 +14,7 @@ import { logAudit } from "@/lib/audit";
 import { assertRoleAllowed } from "@/lib/capabilities";
 import { getIntegrationApiKey } from "@/lib/secrets";
 import { runRoleAgent, isCodebuffProvider } from "@/lib/agents/codebuff";
+import { getSharedKeyConfig, isSharedProvider, SHARED_PROVIDER } from "@/lib/shared-ai";
 import { randomUUID } from "crypto";
 
 export interface PipelineStepResult {
@@ -347,10 +348,16 @@ async function loadRoleConfig(
 
   const rowByRole = new Map((roleModels ?? []).map((r) => [r.role as Role, r]));
 
+  const shared = getSharedKeyConfig();
+
   const config: Partial<Record<Role, ProviderConfig>> = {};
   for (const role of ROLES) {
     const row = rowByRole.get(role);
-    const provider = row?.provider ?? DEFAULT_PROVIDER_CONFIG.provider;
+    // Zero-config default: a role with no Model Router row uses Nexus
+    // Office's shared AI key (Phase 3) when the server has one configured.
+    // Users override per role in the Model Router at any time; adding their
+    // own integration/key always wins over the shared key.
+    const provider = row?.provider ?? (shared ? SHARED_PROVIDER : DEFAULT_PROVIDER_CONFIG.provider);
     const integration = integrationsByName.get(provider);
 
     if (integration) {
@@ -359,15 +366,36 @@ async function loadRoleConfig(
       config[role] = {
         provider,
         model: row?.model ?? DEFAULT_PROVIDER_CONFIG.model,
-        apiKey: apiKey ?? undefined,
+        // A user-added integration always wins; when no key is stored on the
+        // integration itself, fall back to the app's shared env key for known
+        // gateway providers (never sent to the client).
+        apiKey:
+          apiKey ??
+          sharedKeyForIntegration(integration.name, integration.base_url) ??
+          undefined,
         baseUrl: integration.base_url ?? undefined,
       };
       continue;
     }
 
+    if (isSharedProvider(provider)) {
+      config[role] = shared
+        ? {
+            provider: shared.provider,
+            model: row?.model ?? shared.model,
+            apiKey: shared.apiKey,
+          }
+        : {
+            provider,
+            model: row?.model ?? DEFAULT_PROVIDER_CONFIG.model,
+            apiKey: undefined,
+          };
+      continue;
+    }
+
     config[role] = {
       provider,
-      model: row?.model ?? DEFAULT_PROVIDER_CONFIG.model,
+      model: row?.model ?? (shared ? shared.model : DEFAULT_PROVIDER_CONFIG.model),
       apiKey: keysByProvider.get(provider as ProviderName),
     };
   }
@@ -400,6 +428,25 @@ async function loadMemory(supabase: SupabaseClient, projectId: string): Promise<
 }
 
 const CODEBUFF_PROVIDER = "codebuff";
+
+// Shared server-side keys for known OpenAI-compatible gateways, used ONLY
+// when a project added the integration by name but has no stored key on it
+// (and the user has no personal key). Values come from env vars and are
+// never exposed to the client or logged.
+function sharedKeyForIntegration(
+  name: string,
+  baseUrl: string | null
+): string | null | undefined {
+  const normalized = name.toLowerCase();
+  const url = (baseUrl ?? "").toLowerCase();
+  if (url.includes("x.ai") || normalized.includes("grok")) {
+    return process.env.XAI_API_KEY ?? null;
+  }
+  if (url.includes("openrouter.ai") || normalized.includes("openrouter")) {
+    return process.env.OPENROUTER_API_KEY ?? null;
+  }
+  return null;
+}
 
 // Runs one role through the Codebuff agent runtime and normalizes the result
 // to the same shape the plain provider path returns. The role's api_keys row

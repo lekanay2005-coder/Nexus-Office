@@ -261,8 +261,17 @@ async function completeGoogle(
   apiKey: string | undefined,
   { system, prompt }: CompletionRequest
 ): Promise<Omit<CompletionResult, "structured">> {
+  // Key resolution order: per-user/integration key (Model Router / vault) →
+  // GEMINI_API_KEY → legacy GOOGLE_API_KEY. Throwing a clear error when none
+  // is set beats the SDK's vague "Could not resolve authentication method".
+  const resolvedKey = apiKey ?? process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+  if (!resolvedKey) {
+    throw new Error(
+      "No Gemini API key configured. Set GEMINI_API_KEY on the server (or save a Google key in Model Router settings)."
+    );
+  }
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
-  const client = new GoogleGenerativeAI((apiKey ?? process.env.GOOGLE_API_KEY)!);
+  const client = new GoogleGenerativeAI(resolvedKey);
   const genModel = client.getGenerativeModel({ model, systemInstruction: system });
 
   const res = await genModel.generateContent(prompt);

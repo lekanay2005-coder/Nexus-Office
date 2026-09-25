@@ -4,8 +4,20 @@ import { useState } from "react";
 import { useApprovalFlow } from "@/components/common/ApprovalDialog";
 import type { Integration, IntegrationType } from "@/types/db";
 
-const BASE_URL_PRESETS: { label: string; url: string; type: IntegrationType }[] = [
-  { label: "OpenRouter", url: "https://openrouter.ai/api/v1", type: "ai_provider" },
+const BASE_URL_PRESETS: { label: string; url: string; type: IntegrationType; hint?: string }[] = [
+  {
+    label: "Grok (xAI)",
+    url: "https://api.x.ai/v1",
+    type: "ai_provider",
+    hint: "Single provider — Grok models only",
+  },
+  {
+    label: "OpenRouter",
+    url: "https://openrouter.ai/api/v1",
+    type: "ai_provider",
+    hint: "One key → hundreds of models from many providers",
+  },
+  { label: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", type: "ai_provider", hint: "Single provider — Gemini models" },
   { label: "Together AI", url: "https://api.together.xyz/v1", type: "ai_provider" },
   { label: "OpenAI", url: "https://api.openai.com/v1", type: "ai_provider" },
   { label: "Anthropic", url: "https://api.anthropic.com/v1", type: "ai_provider" },
@@ -214,6 +226,7 @@ function AddIntegrationForm({
             <button
               type="button"
               key={p.label}
+              title={p.hint}
               onClick={() => {
                 setBaseUrl(p.url);
                 if (!name) setName(p.label);
@@ -224,6 +237,15 @@ function AddIntegrationForm({
             </button>
           ))}
         </div>
+      )}
+      {type === "ai_provider" && (
+        <p className="text-[11px] leading-relaxed text-neutral-600">
+          Tip: <span className="text-neutral-400">OpenRouter</span> is a single key giving
+          access to many providers&apos; models — its model list in the Model Router is
+          fetched live and is much longer than single-provider entries like Grok (xAI)
+          or Gemini. All entries speak the OpenAI-compatible chat completions API, so
+          Test Connection works the same way for each.
+        </p>
       )}
 
       <input

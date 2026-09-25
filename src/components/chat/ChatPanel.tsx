@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import RoleMessage from "./RoleMessage";
 import RelayTrack from "./RelayTrack";
@@ -38,6 +39,13 @@ export default function ChatPanel({
   // Live progress line from Codebuff-backed roles (e.g. "builder →
   // project_read_file(src/app/page.tsx)") shown while a run is in flight.
   const [roleEvent, setRoleEvent] = useState<string | null>(null);
+  // Free-tier shared-AI limit hit — switches the composer into the
+  // "bring your own key or upgrade" state.
+  const [limitInfo, setLimitInfo] = useState<{
+    used: number | null;
+    limit: number | null;
+    resetAt: string | null;
+  } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -87,6 +95,16 @@ export default function ChatPanel({
 
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
+        // Free-tier shared-AI limit (Phase 3): a 402 means the user is out of
+        // shared runs — show the explicit BYO-key / upgrade prompt instead of
+        // a raw error. Never a silent failure.
+        if (res.status === 402 && data?.code === "free_limit_reached") {
+          setLimitInfo({
+            used: data.usage?.used ?? null,
+            limit: data.usage?.limit ?? null,
+            resetAt: data.usage?.resetAt ?? null,
+          });
+        }
         throw new Error(data.error ?? "Pipeline failed");
       }
 
@@ -152,6 +170,7 @@ export default function ChatPanel({
             setRoleEvent(`${event.role}: ${event.message}`);
           } else if (event.type === "done") {
             setRoleEvent(null);
+            setLimitInfo(null);
             setRuns((prev) =>
               prev.map((r) => (r.id === currentRunId ? { ...r, mode: event.mode, status: "complete" } : r))
             );
@@ -223,6 +242,28 @@ export default function ChatPanel({
 
       {pending && roleEvent && (
         <p className="px-4 pb-1 text-xs text-neutral-500">{roleEvent}</p>
+      )}
+
+      {limitInfo && (
+        <div className="mx-4 mb-1 rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-xs">
+          <p className="font-medium text-amber-300">
+            Free shared-AI limit reached{limitInfo.limit ? ` (${limitInfo.used}/${limitInfo.limit} runs this month)` : ""}.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link
+              href="/projects"
+              className="rounded bg-neutral-800 px-2.5 py-1.5 font-medium text-neutral-100 hover:bg-neutral-700"
+            >
+              Add your own API key (free, unlimited with your own usage)
+            </Link>
+            <Link
+              href="/pricing"
+              className="rounded bg-violet-600 px-2.5 py-1.5 font-medium text-white hover:bg-violet-500"
+            >
+              Upgrade to Pro for unlimited managed AI
+            </Link>
+          </div>
+        </div>
       )}
 
       {error && <p className="px-4 pb-1 text-xs text-red-400">{error}</p>}

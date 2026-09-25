@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ROLES, type Role } from "@/types/db";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/pipeline/roles";
 import { MODEL_CATALOG, PROVIDER_LABELS } from "@/lib/providers/catalog";
@@ -14,6 +14,19 @@ interface RoleModelRow {
 
 const PROVIDERS: ProviderName[] = ["anthropic", "openai", "google"];
 const BUILT_IN_PROVIDERS = new Set<string>(PROVIDERS);
+
+// Gateways whose model list we fetch live instead of hardcoding.
+const DYNAMIC_MODEL_GATEWAYS = new Set(["openrouter"]);
+
+function isDynamicGateway(name: string): boolean {
+  return DYNAMIC_MODEL_GATEWAYS.has(name.toLowerCase());
+}
+
+function monthlyLimitText(): string {
+  // Display-only mirror of lib/shared-ai's default; the authoritative cap is
+  // server-side (NEXUS_FREE_MONTHLY_RUNS).
+  return "50";
+}
 
 // The Codebuff runtime (same agent framework that powers Freebuff) is
 // offered as a per-role provider: it runs the role as a real agent with tool
@@ -60,6 +73,47 @@ export default function ModelRouterPanel({
   });
   const [savingKey, setSavingKey] = useState<ProviderName | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Live model lists for dynamic gateways (OpenRouter), keyed by integration
+  // name. Fetched once per unique gateway the project has an integration for.
+  const [dynamicModels, setDynamicModels] = useState<
+    Record<string, { models: { id: string; label: string }[]; error?: string; loading: boolean }>
+  >({});
+
+  useEffect(() => {
+    const gateways = customIntegrationNames.filter(isDynamicGateway);
+    for (const gw of gateways) {
+      setDynamicModels((prev) => {
+        if (prev[gw]) return prev;
+        (async () => {
+          try {
+            const res = await fetch(
+              `/api/projects/${projectId}/integrations/models?integration=${encodeURIComponent(gw)}`
+            );
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.models?.length) {
+              setDynamicModels((p) => ({ ...p, [gw]: { models: data.models, loading: false } }));
+            } else {
+              setDynamicModels((p) => ({
+                ...p,
+                [gw]: { models: [], loading: false, error: data?.error ?? `HTTP ${res.status}` },
+              }));
+            }
+          } catch (err) {
+            setDynamicModels((p) => ({
+              ...p,
+              [gw]: {
+                models: [],
+                loading: false,
+                error: err instanceof Error ? err.message : "fetch failed",
+              },
+            }));
+          }
+        })();
+        return { ...prev, [gw]: { models: [], loading: true } };
+      });
+    }
+  }, [customIntegrationNames, projectId]);
 
   async function saveAssignment(role: Role, provider: string, model: string) {
     setSavingRole(role);
@@ -120,9 +174,19 @@ export default function ModelRouterPanel({
   return (
     <div className="mx-auto max-w-2xl space-y-10 px-6 py-8 text-neutral-100">
       <section>
-        <h2 className="mb-1 text-lg font-semibold">Model Router</h2>
+        <div className="mb-1 flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Model Router</h2>
+          <span
+            className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-medium text-neutral-400"
+            title="Roles without an explicit assignment run on Nexus Office's shared AI key, capped at the Free-tier monthly allowance. Add your own key to remove the cap."
+          >
+            Using Nexus Office&apos;s shared AI (Free tier)
+          </span>
+        </div>
         <p className="mb-4 text-sm text-neutral-500">
-          Choose which provider and model handles each role in the pipeline.
+          Choose which provider and model handles each role in the pipeline. Roles left on
+          the default run on our shared free-tier key ({monthlyLimitText()} runs/month);
+          add your own key in Integrations to go unlimited.
         </p>
         <div className="space-y-2">
           {ROLES.map((role) => {
@@ -206,6 +270,42 @@ export default function ModelRouterPanel({
                       </option>
                     ))}
                   </select>
+                ) : isDynamicGateway(current.provider) ? (
+                  (() => {
+                    const entry = dynamicModels[current.provider];
+                    if (!entry || entry.loading) {
+                      return (
+                        <span className="flex-1 text-xs text-neutral-500">
+                          Loading model list…
+                        </span>
+                      );
+                    }
+                    if (entry.error || entry.models.length === 0) {
+                      return (
+                        <span className="flex-1 text-xs text-amber-400">
+                          {entry.error ?? "No models returned"} — check the integration in
+                          the Integrations panel
+                        </span>
+                      );
+                    }
+                    return (
+                      <select
+                        value={
+                          entry.models.some((m) => m.id === current.model)
+                            ? current.model
+                            : entry.models[0].id
+                        }
+                        onChange={(e) => saveAssignment(role, current.provider, e.target.value)}
+                        className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100"
+                      >
+                        {entry.models.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  })()
                 ) : (
                   <input
                     value={current.model}
