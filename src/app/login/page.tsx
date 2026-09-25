@@ -1,14 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SetupRequired from "@/components/SetupRequired";
 import NexusLogo from "@/components/brand/NexusLogo";
 
+// `useSearchParams` below opts this page out of static prerendering unless it
+// sits behind a Suspense boundary (Next.js CSR bailout). The default export
+// is just that boundary; the interactive form lives in LoginForm.
 export default function LoginPage({
   initialMode = "signin",
 }: { initialMode?: "signin" | "signup" } = {}) {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm initialMode={initialMode} />
+    </Suspense>
+  );
+}
+
+function LoginFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="glass-panel w-full max-w-sm rounded-xl p-8 text-center">
+        <NexusLogo surface="card" glow className="mb-3" />
+        <p className="text-sm text-neutral-400">Loading…</p>
+      </div>
+    </div>
+  );
+}
+
+function LoginForm({ initialMode = "signin" }: { initialMode?: "signin" | "signup" }) {
   // All hooks run unconditionally on every render — the env-var gate below
   // returns early but must never skip hook calls (Rules of Hooks).
   const [email, setEmail] = useState("");
@@ -22,13 +44,9 @@ export default function LoginPage({
 
   // Surface OAuth errors that the /auth/callback route redirects back here
   // with, e.g. ?oauth_error=access_denied if the user cancels GitHub consent.
-  // Derived during render instead of in an effect, so the message shows on
-  // first paint without a cascading setState pass.
+  // Read during render inside the Suspense boundary — no effect needed.
   const oauthErrorParam = searchParams.get("oauth_error");
-  const [oauthError, setOauthError] = useState<string | null>(
-    oauthErrorParam ? decodeURIComponent(oauthErrorParam) : null
-  );
-  const statusMessage = oauthError ?? status;
+  const statusMessage = oauthErrorParam ? decodeURIComponent(oauthErrorParam) : status;
 
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||

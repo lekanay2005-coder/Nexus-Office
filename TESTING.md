@@ -42,6 +42,55 @@ account available.
 
 ---
 
+## Deployment
+
+Checklist for every production deploy (Vercel). CI runs the same three gates
+(`tsc --noEmit`, `eslint`, `next build`) — keep them green before pushing.
+
+### Required Vercel environment variables
+
+Set in Vercel → Project Settings → Environment Variables (Production, Preview,
+and Development) — a missing var builds fine locally (via `.env.local`) but
+breaks at runtime in production:
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | recommended | server-side admin operations |
+| `NEXUS_ENCRYPTION_KEY` | yes | encrypts user API keys / secrets at rest |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` | one+ | built-in LLM providers |
+| `CODEBUFF_API_KEY` | optional | only for roles routed to the Codebuff provider |
+| `RESEND_API_KEY` + `FEEDBACK_EMAIL` | optional | feedback email notifications |
+
+Note: `next build` itself does not need any env vars (pages fall back to
+`<SetupRequired />`), which is exactly why a missing-var failure only shows up
+after deploy — check them before pushing, not after.
+
+### Supabase migrations
+
+Run pending migrations in `supabase/migrations/` against the **production**
+Supabase instance (SQL editor or `supabase db push`) **before** deploying
+schema-dependent changes. Shipping code that references a table/column the
+production DB doesn't have yet breaks the affected routes at request time even
+though the build succeeded. Current migrations: `0001_init.sql` through
+`0009_feedback_table.sql`.
+
+### Bundle-external native/WASM dependencies
+
+`@codebuff/sdk` is listed in `serverExternalPackages` (`next.config.ts`) — its
+WASM loaders cannot be bundled. If a future dependency adds native or WASM
+modules, it likely needs the same treatment, or the build fails with
+`Module not found: Can't resolve 'GOT.mem' / 'env'` style errors.
+
+### Post-deploy verification
+
+- [ ] Vercel deployment shows "Ready", not "Error"
+- [ ] The deployed URL actually loads (login page renders, not a 500)
+- [ ] One authenticated flow works end-to-end (e.g. send a chat message)
+
+---
+
 ## Current build state notes (honest gaps, as of Addendum 7)
 
 These checklist items exercise features that are not fully built yet — mark
