@@ -1,36 +1,24 @@
 {
-  "name": "nexus-office",
-  "version": "0.1.0",
+  "name": "nexus-office-monorepo",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "assets": "node scripts/generate-brand-assets.mjs"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.126.0",
-    "@codebuff/sdk": "^0.10.7",
-    "@google/generative-ai": "^0.24.1",
-    "@monaco-editor/react": "^4.7.0",
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.116.0",
-    "next": "16.3.5",
-    "openai": "^7.17.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "zod": "^4.6.5"
+    "dev": "npm run dev --workspace apps/web",
+    "build": "npm run build --workspace apps/web",
+    "start": "npm run start --workspace apps/web",
+    "lint": "npm run lint --workspace apps/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "cli": "npm run dev --workspace @nexus-office/cli",
+    "assets": "npm run assets --workspace apps/web"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.5",
-    "supabase": "^2.117.0",
-    "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,9 +1,26 @@
 # Nexus Office
 
 A persistent 5-role AI team (Strategist, Builder, Analyst, QA, Ops) for vibe coders,
-running on Next.js + Supabase.
+running on Next.js + Supabase, with a terminal CLI over the same API.
 
-## Status: MVP + v2 modules
+## Monorepo layout (Addendum 17)
+
+```
+apps/
+  web/                 # Next.js app (UI + API routes)
+  cli/                 # `nexus` CLI (login, chat, sync, vault, deploy, undo, REPL)
+packages/
+  pipeline-types/      # shared TypeScript types (zero runtime deps)
+  github-sync/         # GitHub commit/vault/diff logic shared by web + CLI
+  api-client/          # @nexus-office/api-client — typed client for the web API
+supabase/              # migrations (run in filename order)
+```
+
+npm workspaces: install once at the root (`npm install`), run app commands
+from the root (`npm run dev`, `npm run build`, `npm run typecheck`,
+`npm run cli -- --help`).
+
+## Status: MVP + v2 modules + isolation
 
 - **Project workspace** — create/select a project; each has persistent memory
   (tech stack, decisions log, open issues) in Supabase.
@@ -12,20 +29,26 @@ running on Next.js + Supabase.
   (Strategist → Builder → Analyst → QA → Ops), with the full transcript persisted
   per project and Ops updating memory before the run completes.
 - **Code Canvas** — file tree + Monaco editor + a best-effort static preview
-  iframe. The Builder role's fenced ```path=...``` code blocks are written
-  straight into the project's file tree.
+  iframe, plus an "Undo last run" rollback button.
+- **Agent isolation** — every run's Builder writes land on an isolated per-run
+  snapshot (`run_snapshots`), scope-checked against a File Scoper's declared
+  file list, then merged (auto by default, or gated behind a reviewable diff
+  per project via "Require approval before merging code changes").
 - **Model Router** — per-role, per-project provider and model selection, with
   per-user API keys encrypted at rest (`role_models`, `api_keys` tables).
 - **Cost Meter** — running token/cost estimate per project from persisted steps.
 - **Memory Board, Prompt Vault, Deploy Desk, Governance** — role capabilities,
   approval gating, audit log, and an encrypted secrets vault.
+- **CLI** — `nexus login | projects list | chat | sync | vault | deploy | undo`,
+  plus a conversational REPL when run with no arguments in a project directory.
+  See `apps/cli/`.
 
 ## Setup
 
 1. Create a Supabase project.
 2. Run **all** migrations in `supabase/migrations/` in filename order (via the
    SQL editor, or `supabase db push` if using the CLI).
-3. Copy `.env.local.example` to `.env.local` and fill in:
+3. Copy `.env.local.example` to `apps/web/.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` from your
      Supabase project settings.
    - At least one provider key: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
@@ -84,7 +107,7 @@ functional.
 
 ## How the pipeline works
 
-`src/lib/pipeline/run.ts` is the orchestrator:
+`apps/web/src/lib/pipeline/run.ts` is the orchestrator:
 
 1. Loads the project's `project_memory` row (creating it if this is the first run).
 2. Calls the Strategist with the memory + user message. The Strategist ends its
@@ -93,13 +116,16 @@ functional.
    return this as structured output instead).
 3. **Direct** (`needs_full_pipeline: false`): Ops writes the final answer from
    the Strategist's direction and the run ends.
-4. **Pipeline** (`needs_full_pipeline: true`): Builder → Analyst → QA → Ops run
-   in sequence, each one receiving the project memory, the user's message, and
+4. **Pipeline** (`needs_full_pipeline: true`): a File Scoper sub-step declares
+   which files the work may touch, then Builder → Analyst → QA → Ops run in
+   sequence, each one receiving the project memory, the user's message, and
    every prior role's output from this turn. The Builder's fenced `path=...`
-   code blocks are upserted into the `files` table (only if the Builder role
-   holds the `write_files` capability). Ops closes with a memory update
-   (decisions, open issues, new tech stack entries) that gets merged into
-   `project_memory` before the run is marked complete.
+   code blocks are captured into the run's **isolated snapshot** (never written
+   straight to the `files` table), scope-enforced against the declared list,
+   and merged after QA/Ops — automatically, or after your review when
+   `require_merge_approval` is on (Addendum 17). Ops closes with a memory
+   update that gets merged into `project_memory` before the run is marked
+   complete.
 
 Every step is persisted to `pipeline_steps` (one row per role) linked to a
 `pipeline_runs` row, so the full transcript is queryable per project.

@@ -1,0 +1,35 @@
+{
+  "name": "@nexus-office/cli",
+  "version": "0.1.0",
+  "description": "Nexus Office CLI — your 5-role AI team in the terminal.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "nexus": "./bin/nexus.js"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc && node bin/nexus.js",
+    "start": "node bin/nexus.js",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@nexus-office/api-client": "*",
+    "@nexus/github-sync": "*",
+    "@nexus/pipeline-types": "*",
+    "commander": "^14.0.0",
+    "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}

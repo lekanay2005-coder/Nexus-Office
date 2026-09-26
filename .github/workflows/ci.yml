@@ -23,17 +23,21 @@ jobs:
           node-version: 24 # matches local dev (v24)
           cache: npm # package-lock.json is committed
 
-      - name: Install dependencies
+      - name: Install dependencies (workspaces)
         run: npm ci
 
-      - name: Typecheck (tsc --noEmit)
-        run: npx tsc --noEmit
+      # Every workspace has a typecheck script (packages/*, apps/*).
+      - name: Typecheck (all workspaces)
+        run: npm run typecheck
 
-      - name: Lint (eslint)
-        run: npx eslint src
+      - name: Lint (eslint, web app)
+        run: npm run lint --workspace apps/web
 
       # No Supabase env vars needed: every page guards on the env vars and
       # falls back to <SetupRequired />, and API routes are dynamic (never
       # executed at build time) — verified by building with .env.local removed.
-      - name: Build (next build)
-        run: npm run build
+      - name: Build web app
+        run: npm run build --workspace apps/web
+
+      - name: CLI smoke (help output renders)
+        run: npm run start --workspace apps/cli -- --help

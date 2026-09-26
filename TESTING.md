@@ -4,8 +4,8 @@ Manual checklist for the full user flow. **Run this by hand after each major
 addendum.** Do not automate these into a test suite yet — this is a human pass
 over the whole product.
 
-Setup: fresh incognito window, dev server running (`npm run dev`), test
-account available.
+Setup: fresh incognito window, dev server running (`npm run dev` from the repo
+root — it delegates to `apps/web`), test account available.
 
 ---
 
@@ -18,7 +18,9 @@ account available.
 
 - [ ] Send a simple message in Office Chat; confirm it bypasses the full pipeline (Strategist decides)
 - [ ] Send a complex message; confirm all 5 roles run in order and stream visibly
-- [ ] Confirm Builder's code output appears in Code Canvas's file tree automatically
+- [ ] Confirm Builder's code output appears in Code Canvas's file tree after the run's snapshot merges (auto-merge shows "✓ merged"; review mode shows the diff + Approve/Discard)
+- [ ] Press "Undo last run" in Code Canvas; confirm the run's files revert exactly
+- [ ] Toggle "Require approval before merging code changes" in Perms; confirm runs now hold at "awaiting your review" with a per-file diff until approved
 
 ## Code Canvas & Memory
 
@@ -57,11 +59,19 @@ breaks at runtime in production:
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | recommended | server-side admin operations |
 | `NEXUS_ENCRYPTION_KEY` | yes | encrypts user API keys / secrets at rest |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` | one+ | built-in LLM providers |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) | one+ | built-in LLM providers |
 | `CODEBUFF_API_KEY` | optional | only for roles routed to the Codebuff provider |
+| `XAI_API_KEY` / `OPENROUTER_API_KEY` | optional | gateway fallbacks for integrations |
+| `NEXUS_DEFAULT_AI_PROVIDER` / `NEXUS_DEFAULT_AI_MODEL` / `NEXUS_DEFAULT_AI_KEY` | optional | free-tier shared AI |
+| `NEXUS_FREE_MONTHLY_RUNS` / `NEXUS_SHARED_DAILY_CAP` | optional | shared-AI caps |
 | `RESEND_API_KEY` + `FEEDBACK_EMAIL` | optional | feedback email notifications |
+| `NEXT_PUBLIC_NEXUS_URL` | optional | public app URL for branding/deep links |
+| `NEXUS_MOCK_LLM` / `NEXUS_MOCK_DEPLOY` | optional | dev escape hatches (set `=1`) |
+
+`SUPABASE_SERVICE_ROLE_KEY` is intentionally absent: no app code references
+it today (everything runs under the anon key + RLS). Don't add it to Vercel
+unless you also add server-side admin code that needs it.
 
 Note: `next build` itself does not need any env vars (pages fall back to
 `<SetupRequired />`), which is exactly why a missing-var failure only shows up
@@ -74,7 +84,9 @@ Supabase instance (SQL editor or `supabase db push`) **before** deploying
 schema-dependent changes. Shipping code that references a table/column the
 production DB doesn't have yet breaks the affected routes at request time even
 though the build succeeded. Current migrations: `0001_init.sql` through
-`0009_feedback_table.sql`.
+`0013_agent_isolation.sql` (0013 adds `run_snapshots`,
+`pipeline_runs.merge_status`, and `projects.require_merge_approval` — required
+for the Addendum 17 isolation UI/routes).
 
 **This is mandatory on every deploy, not just local dev** — a missed
 production migration has now caused two outages (the Addendum 7–10 tables

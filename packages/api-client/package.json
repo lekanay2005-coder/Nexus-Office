@@ -1,0 +1,25 @@
+{
+  "name": "@nexus-office/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed client for the Nexus Office web API — shared by the web app and CLI.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pipeline": "./src/pipeline.ts",
+    "./projects": "./src/projects.ts",
+    "./vault": "./src/vault.ts",
+    "./deploy": "./src/deploy.ts",
+    "./auth": "./src/auth.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@nexus/pipeline-types": "*",
+    "typescript": "^5"
+  }
+}

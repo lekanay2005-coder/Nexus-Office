@@ -1,0 +1,40 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "assets": "node scripts/generate-brand-assets.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "@codebuff/sdk": "^0.10.7",
+    "@google/generative-ai": "^0.24.1",
+    "@monaco-editor/react": "^4.7.0",
+    "@nexus-office/api-client": "*",
+    "@nexus/github-sync": "*",
+    "@nexus/pipeline-types": "*",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.116.0",
+    "next": "16.3.5",
+    "openai": "^7.17.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.5",
+    "supabase": "^2.117.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
