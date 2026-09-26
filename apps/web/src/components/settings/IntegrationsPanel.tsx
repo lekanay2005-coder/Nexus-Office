@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useApprovalFlow } from "@/components/common/ApprovalDialog";
 import type { Integration, IntegrationType } from "@/types/db";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 const BASE_URL_PRESETS: { label: string; url: string; type: IntegrationType; hint?: string }[] = [
   {
@@ -60,24 +63,29 @@ export default function IntegrationsPanel({
       }
     }
 
-    const res = await fetch(`/api/projects/${projectId}/integrations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const { data: result } = await nexus.client.request<{
+        integration?: { id: string; name: string; type: string; base_url: string | null };
+        error?: string;
+      }>("POST", `/api/projects/${projectId}/integrations`, {
         type: data.type,
         name: data.name,
         base_url: data.base_url,
         api_key: data.api_key,
         extra_config: extraConfig,
-      }),
-    });
-    const result = await res.json();
-    if (!res.ok) {
-      setError(result.error ?? "Failed to add integration");
-      return;
+      });
+      if (!result?.integration) {
+        setError(result?.error ?? "Failed to add integration");
+        return;
+      }
+      setIntegrations((prev) => [
+        ...prev.filter((i) => i.name !== result.integration!.name),
+        result.integration as unknown as typeof prev[number],
+      ]);
+      setShowForm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add integration");
     }
-    setIntegrations((prev) => [...prev.filter((i) => i.name !== result.integration.name), result.integration]);
-    setShowForm(false);
   }
 
   async function handleDelete(integrationId: string) {
@@ -91,11 +99,21 @@ export default function IntegrationsPanel({
 
   async function handleTest(integrationId: string) {
     setTesting(integrationId);
-    const res = await fetch(`/api/projects/${projectId}/integrations/${integrationId}/test`, {
-      method: "POST",
-    });
-    const result = await res.json();
-    setTestResults((prev) => ({ ...prev, [integrationId]: result }));
+    try {
+      const result = (await nexus.testIntegration(projectId, integrationId)) as {
+        ok: boolean;
+        message: string;
+      };
+      setTestResults((prev) => ({ ...prev, [integrationId]: result }));
+    } catch (err) {
+      setTestResults((prev) => ({
+        ...prev,
+        [integrationId]: {
+          ok: false,
+          message: err instanceof Error ? err.message : "Test failed",
+        },
+      }));
+    }
     setTesting(null);
   }
 

@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 // Addendum 9 Phase 1: Account Settings — editable Display Name field.
 // The name shown in the nav, Memory Board, Audit Log, and GitHub commit
@@ -15,11 +18,8 @@ export default function AccountPanel() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/me/display-name");
-        if (res.ok) {
-          const data = await res.json();
-          setDisplayName(data.displayName ?? "");
-        }
+        const data = await nexus.getDisplayName();
+        setDisplayName(data.displayName ?? "");
       } catch {
         // panel still renders; save will surface any real problem
       }
@@ -30,14 +30,13 @@ export default function AccountPanel() {
   async function save() {
     setSaving(true);
     setStatus(null);
-    const res = await fetch("/api/me/display-name", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName }),
-    });
-    const data = await res.json().catch(() => ({}));
+    try {
+      await nexus.saveDisplayName(displayName);
+      setStatus("Saved.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to save");
+    }
     setSaving(false);
-    setStatus(res.ok ? "Saved." : (data.error as string) ?? "Failed to save");
   }
 
   return (

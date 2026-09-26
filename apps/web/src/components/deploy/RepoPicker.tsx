@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 // Addendum 9 Phase 1: GitHub org/repo picker. Lists the user's personal
 // account AND every organization they belong to; picking an owner swaps the
@@ -44,13 +47,16 @@ export default function RepoPicker({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/github/owners?owner=${encodeURIComponent(owner)}`);
-      const data = await res.json();
-      if (!res.ok) {
+      const { data } = await nexus.client.request<{
+        repos?: RepoSummary[];
+        error?: string;
+      }>("GET", `/api/github/owners?owner=${encodeURIComponent(owner)}`);
+      if (!data || (data as { error?: string }).error) {
+        const errText = (data as { error?: string } | null)?.error;
         setError(
-          data.error === "RECONNECT_GITHUB"
+          errText === "RECONNECT_GITHUB"
             ? { kind: "reconnect" }
-            : { kind: "message", message: data.error ?? "Failed to list repos" }
+            : { kind: "message", message: errText ?? "Failed to list repos" }
         );
       } else {
         setRepos(data.repos ?? []);
@@ -64,13 +70,16 @@ export default function RepoPicker({
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/github/owners");
-        const data = await res.json();
-        if (!res.ok) {
+        const { data } = await nexus.client.request<{
+          owners?: Owner[];
+          activeOwner?: string;
+          error?: string;
+        }>("GET", "/api/github/owners");
+        if (!data || data.error) {
           setError(
-            data.error === "RECONNECT_GITHUB"
+            data?.error === "RECONNECT_GITHUB"
               ? { kind: "reconnect" }
-              : { kind: "message", message: data.error ?? "Failed to list accounts" }
+              : { kind: "message", message: data?.error ?? "Failed to list accounts" }
           );
           setLoading(false);
           return;
@@ -90,17 +99,20 @@ export default function RepoPicker({
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch("/api/github/owners", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner: activeOwner, name: newRepoName.trim(), private: newRepoPrivate }),
+      const { data } = await nexus.client.request<{
+        repo?: { fullName: string };
+        error?: string;
+      }>("POST", "/api/github/owners", {
+        owner: activeOwner,
+        name: newRepoName.trim(),
+        private: newRepoPrivate,
       });
-      const data = await res.json();
-      if (!res.ok) {
+      if (!data?.repo) {
+        const errText = data?.error;
         setError(
-          data.error === "RECONNECT_GITHUB"
+          errText === "RECONNECT_GITHUB"
             ? { kind: "reconnect" }
-            : { kind: "message", message: data.error ?? "Failed to create repo" }
+            : { kind: "message", message: errText ?? "Failed to create repo" }
         );
       } else {
         onPick(data.repo.fullName as string);

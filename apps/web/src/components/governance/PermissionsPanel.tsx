@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 // Role Permissions (Addendum 3): least-privilege capability toggles per
 // role, enforced server-side before any role output is applied, plus the
@@ -64,21 +67,13 @@ export default function PermissionsPanel({ projectId }: { projectId: string }) {
   useEffect(() => {
     (async () => {
       try {
-        const [capRes, settingsRes] = await Promise.all([
-          fetch(`/api/projects/${projectId}/capabilities`),
-          fetch(`/api/projects/${projectId}/settings`),
+        const [caps, settings] = await Promise.all([
+          nexus.getCapabilities(projectId),
+          nexus.getSettings(projectId),
         ]);
-        const capData = await capRes.json();
-        const settingsData = await settingsRes.json();
-        if (!capRes.ok) {
-          setError(capData.error ?? "Failed to load permissions");
-          return;
-        }
-        setCapabilities(capData.capabilities);
-        if (settingsRes.ok) {
-          setRequireApproval(settingsData.settings?.requireApproval !== false);
-          setRequireMergeApproval(settingsData.settings?.requireMergeApproval === true);
-        }
+        setCapabilities(caps as Record<Role, Capability[]>);
+        setRequireApproval(settings.requireApproval !== false);
+        setRequireMergeApproval(settings.requireMergeApproval === true);
       } catch {
         setError("Failed to load permissions");
       }
@@ -104,20 +99,14 @@ export default function PermissionsPanel({ projectId }: { projectId: string }) {
     setError(null);
     setNotice(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/capabilities`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ capabilities }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Failed to save permissions");
-      } else {
-        setCapabilities(data.capabilities);
-        setNotice("Permissions saved");
-      }
-    } catch {
-      setError("Failed to save permissions");
+      const saved = await nexus.saveCapabilities(
+        projectId,
+        capabilities as unknown as Record<string, string[]>
+      );
+      setCapabilities(saved as Record<Role, Capability[]>);
+      setNotice("Permissions saved");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save permissions");
     }
     setSaving(false);
   }
@@ -133,16 +122,7 @@ export default function PermissionsPanel({ projectId }: { projectId: string }) {
     const previous = requireApproval;
     setRequireApproval(checked);
     try {
-      const res = await fetch(`/api/projects/${projectId}/settings`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requireApproval: checked }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Failed to save setting");
-        setRequireApproval(previous);
-      }
+      await nexus.saveSettings(projectId, { requireApproval: checked });
     } catch {
       setError("Failed to save setting");
       setRequireApproval(previous);
@@ -159,16 +139,7 @@ export default function PermissionsPanel({ projectId }: { projectId: string }) {
     const previous = requireMergeApproval;
     setRequireMergeApproval(checked);
     try {
-      const res = await fetch(`/api/projects/${projectId}/settings`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requireMergeApproval: checked }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Failed to save setting");
-        setRequireMergeApproval(previous);
-      }
+      await nexus.saveSettings(projectId, { requireMergeApproval: checked });
     } catch {
       setError("Failed to save setting");
       setRequireMergeApproval(previous);

@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 type ConnectionProvider = "github" | "vercel";
 
@@ -37,35 +40,27 @@ export default function ConnectionsPanel({
     setSaving(provider);
     setError(null);
 
-    const res = await fetch("/api/settings/api-keys", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, key }),
-    });
-
-    if (res.ok) {
+    try {
+      await nexus.saveApiKey(provider, key);
       setConfigured((prev) => new Set(prev).add(provider));
       setDrafts((prev) => ({ ...prev, [provider]: "" }));
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? `Failed to save ${LABELS[provider]}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to save ${LABELS[provider]}`);
     }
     setSaving(null);
   }
 
   async function remove(provider: ConnectionProvider) {
     setSaving(provider);
-    const res = await fetch("/api/settings/api-keys", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider }),
-    });
-    if (res.ok) {
+    try {
+      await nexus.deleteApiKey(provider);
       setConfigured((prev) => {
         const next = new Set(prev);
         next.delete(provider);
         return next;
       });
+    } catch {
+      // key stays listed; user can retry
     }
     setSaving(null);
   }

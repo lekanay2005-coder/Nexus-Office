@@ -8,6 +8,9 @@
 // per-user via /api/me/onboarding.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 export interface TourStep {
   key: string; // matches a data-tour attribute somewhere in the app
@@ -89,12 +92,9 @@ export default function OnboardingTour({ autoStart }: { autoStart: boolean }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/me/onboarding");
-        if (res.ok) {
-          const data = await res.json();
-          if (!data.onboardingCompleted) start();
-          else localStorage.setItem(STORAGE_KEY, "1");
-        }
+        const data = (await nexus.getOnboarding()) as { onboardingCompleted?: boolean };
+        if (!data.onboardingCompleted) start();
+        else localStorage.setItem(STORAGE_KEY, "1");
       } catch {
         // Can't reach the API — don't nag.
       }
@@ -117,11 +117,7 @@ export default function OnboardingTour({ autoStart }: { autoStart: boolean }) {
     setStepIndex(null);
     localStorage.setItem(STORAGE_KEY, "1");
     try {
-      await fetch("/api/me/onboarding", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ completed }),
-      });
+      await nexus.client.request("PATCH", "/api/me/onboarding", { completed });
     } catch {
       // Best-effort; the local flag still prevents same-session repeats.
     }

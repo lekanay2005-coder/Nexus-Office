@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import NexusLogo from "@/components/brand/NexusLogo";
 import { createClient } from "@/lib/supabase/client";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 // Addendum 9 Phase 1: one-time "What should we call you?" modal. Mounted
 // once per workspace; self-gates by fetching the profile and only showing
@@ -22,9 +25,7 @@ export default function DisplayNamePrompt() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/me/display-name");
-        if (!res.ok) return; // stay hidden on failure — never block the app
-        const data = await res.json();
+        const data = await nexus.getDisplayName();
         if (cancelled) return;
         if (!data.needsDisplayName) {
           setGate("done");
@@ -60,17 +61,14 @@ export default function DisplayNamePrompt() {
     if (!name.trim()) return;
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/me/display-name", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName: name }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Failed to save");
+    try {
+      await nexus.saveDisplayName(name);
+    } catch (err) {
+      setSaving(false);
+      setError(err instanceof Error ? err.message : "Failed to save");
       return;
     }
+    setSaving(false);
     setGate("done");
   }
 

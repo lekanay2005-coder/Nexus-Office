@@ -8,6 +8,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 interface PublicPrompt {
   prompt_id: string;
@@ -31,12 +34,11 @@ export default function ExploreBoard({ signedIn }: { signedIn: boolean }) {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/explore");
-      const data = await res.json().catch(() => null);
-      if (res.ok) {
-        setPrompts(data.prompts ?? []);
-        setAllTags(data.allTags ?? []);
-      } else {
+      try {
+        const { prompts: list, allTags: tags } = await nexus.listExplorePrompts();
+        setPrompts(list);
+        setAllTags(tags);
+      } catch {
         setPrompts([]);
       }
     })();
@@ -76,14 +78,12 @@ export default function ExploreBoard({ signedIn }: { signedIn: boolean }) {
       `Report "${p.title}" — why are you flagging this prompt?`
     );
     if (!reason?.trim()) return;
-    const res = await fetch("/api/explore", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ promptId: p.prompt_id, reason: reason.trim() }),
-    });
-    if (res.ok) {
+    try {
+      await nexus.reportExplorePrompt(p.prompt_id, reason.trim());
       setReportedId(p.prompt_id);
       setTimeout(() => setReportedId(null), 2500);
+    } catch {
+      // report is best-effort
     }
   }
 

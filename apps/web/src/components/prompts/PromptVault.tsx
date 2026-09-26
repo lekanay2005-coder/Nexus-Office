@@ -4,6 +4,9 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import NexusLogo from "@/components/brand/NexusLogo";
 import type { Prompt } from "@/types/db";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt[] }) {
   const [prompts, setPrompts] = useState<Prompt[]>(initialPrompts);
@@ -30,8 +33,12 @@ export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt
   }, [prompts, search, activeTag]);
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/prompts/${id}`, { method: "DELETE" });
-    if (res.ok) setPrompts((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await nexus.deleteVaultPrompt(id);
+      setPrompts((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      // row stays; user can retry
+    }
   }
 
   async function handleCopy(prompt: Prompt) {
@@ -54,16 +61,19 @@ export default function PromptVault({ initialPrompts }: { initialPrompts: Prompt
     if (visibilityToggling) return;
     const next = prompt.visibility === "public" ? "private" : "public";
     setVisibilityToggling(prompt.id);
-    const res = await fetch(`/api/prompts/${prompt.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ visibility: next }),
-    });
-    const data = await res.json().catch(() => null);
-    if (res.ok && data?.prompt) {
-      upsertLocal(data.prompt);
-    } else if (data?.vaultError) {
-      alert(`Saved, but the GitHub vault sync failed: ${data.vaultError}`);
+    try {
+      const { data } = await nexus.client.request<{ prompt?: Prompt; vaultError?: string }>(
+        "PATCH",
+        `/api/prompts/${prompt.id}`,
+        { visibility: next }
+      );
+      if (data?.prompt) {
+        upsertLocal(data.prompt);
+      } else if (data?.vaultError) {
+        alert(`Saved, but the GitHub vault sync failed: ${data.vaultError}`);
+      }
+    } catch {
+      // network-level failure; state unchanged
     }
     setVisibilityToggling(null);
   }
@@ -254,20 +264,22 @@ function PromptEditor({
       .map((t) => t.trim())
       .filter(Boolean);
 
-    const res = await fetch(prompt ? `/api/prompts/${prompt.id}` : "/api/prompts", {
-      method: prompt ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, body, tags }),
-    });
-
-    const data = await res.json();
-    setSaving(false);
-
-    if (!res.ok) {
-      setError(data.error ?? "Failed to save prompt");
-      return;
+    try {
+      const { data } = await nexus.client.request<{ prompt?: Prompt; error?: string }>(
+        prompt ? "PATCH" : "POST",
+        prompt ? `/api/prompts/${prompt.id}` : "/api/prompts",
+        { title, body, tags }
+      );
+      setSaving(false);
+      if (!data?.prompt) {
+        setError(data?.error ?? "Failed to save prompt");
+        return;
+      }
+      onSaved(data.prompt);
+    } catch {
+      setSaving(false);
+      setError("Failed to save prompt");
     }
-    onSaved(data.prompt);
   }
 
   return (

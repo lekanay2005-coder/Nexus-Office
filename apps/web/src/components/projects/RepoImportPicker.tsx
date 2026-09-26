@@ -8,6 +8,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 // (no other imports needed — tour anchors are plain attributes)
 
 interface Owner {
@@ -38,13 +41,15 @@ export default function RepoImportPicker() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/github/owners?owner=${encodeURIComponent(owner)}`);
-      const data = await res.json();
-      if (!res.ok) {
+      const { data } = await nexus.client.request<{
+        repos?: RepoSummary[];
+        error?: string;
+      }>("GET", `/api/github/owners?owner=${encodeURIComponent(owner)}`);
+      if (!data || data.error) {
         setError(
-          data.error === "RECONNECT_GITHUB"
+          data?.error === "RECONNECT_GITHUB"
             ? { kind: "reconnect" }
-            : { kind: "message", message: data.error ?? "Failed to list repos" }
+            : { kind: "message", message: data?.error ?? "Failed to list repos" }
         );
       } else {
         setRepos(data.repos ?? []);
@@ -58,13 +63,16 @@ export default function RepoImportPicker() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/github/owners");
-      const data = await res.json();
-      if (!res.ok) {
+      const { data } = await nexus.client.request<{
+        owners?: Owner[];
+        activeOwner?: string;
+        error?: string;
+      }>("GET", "/api/github/owners");
+      if (!data || data.error) {
         setError(
-          data.error === "RECONNECT_GITHUB"
+          data?.error === "RECONNECT_GITHUB"
             ? { kind: "reconnect" }
-            : { kind: "message", message: data.error ?? "Failed to list accounts" }
+            : { kind: "message", message: data?.error ?? "Failed to list accounts" }
         );
         setLoading(false);
         return;
@@ -91,20 +99,14 @@ export default function RepoImportPicker() {
     if (importing) return;
     setImporting(fullName);
     try {
-      const res = await fetch("/api/projects/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo: fullName }),
+      const project = await nexus.connectRepo(fullName);
+      router.push(`/projects/${project.id}`);
+      return;
+    } catch (err) {
+      setError({
+        kind: "message",
+        message: err instanceof Error ? err.message : "Failed to import repo",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError({ kind: "message", message: data.error ?? "Failed to import repo" });
-      } else {
-        router.push(`/projects/${data.project.id}`);
-        return;
-      }
-    } catch {
-      setError({ kind: "message", message: "Failed to import repo" });
     }
     setImporting(null);
   }

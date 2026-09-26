@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import SaveToGitHub from "./SaveToGitHub";
 import { useApprovalFlow } from "@/components/common/ApprovalDialog";
 import type { Deploy, DeployStatus, Integration, Project } from "@/types/db";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 const STATUS_STYLES: Record<DeployStatus, string> = {
   pending: "bg-neutral-700 text-neutral-200",
@@ -38,25 +41,24 @@ export default function DeployDesk({
   async function saveConfig() {
     setSavingConfig(true);
     setError(null);
-    const res = await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ github_repo: githubRepo, vercel_project_id: vercelProjectId }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Failed to save deploy settings");
+    try {
+      await nexus.updateProject(project.id, {
+        github_repo: githubRepo,
+        vercel_project_id: vercelProjectId,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save deploy settings");
     }
     setSavingConfig(false);
   }
 
   async function handleRepoChange(repo: string) {
     setGithubRepo(repo);
-    await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ github_repo: repo }),
-    });
+    try {
+      await nexus.updateProject(project.id, { github_repo: repo });
+    } catch {
+      // picker already shows the new value; a refetch will reconcile
+    }
   }
 
   async function handleDeploy() {
@@ -80,12 +82,17 @@ export default function DeployDesk({
   }
 
   async function refreshDeploy(deployId: string) {
-    const res = await fetch(`/api/projects/${project.id}/deploys/${deployId}/refresh`, {
-      method: "POST",
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    setDeploys((prev) => prev.map((d) => (d.id === deployId ? data.deploy : d)));
+    try {
+      const { data } = await nexus.client.request<{ deploy: Deploy }>(
+        "POST",
+        `/api/projects/${project.id}/deploys/${deployId}/refresh`
+      );
+      if (data?.deploy) {
+        setDeploys((prev) => prev.map((d) => (d.id === deployId ? data.deploy : d)));
+      }
+    } catch {
+      // stays at current status until the next poll
+    }
   }
 
   // Auto-poll while any deploy is still in flight.

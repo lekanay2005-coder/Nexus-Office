@@ -45,6 +45,39 @@ export async function getProject(
   return client.expect("GET", `/api/projects/${projectId}`);
 }
 
+/** Partial project update (repo connection, branding flags, pro status). */
+export async function updateProject(
+  client: NexusClient,
+  projectId: string,
+  patch: {
+    github_repo?: string;
+    vercel_project_id?: string;
+    is_pro?: boolean;
+    show_preview_watermark?: boolean;
+    watermark_deployed_site?: boolean;
+  }
+): Promise<ProjectSummary> {
+  const data = await client.expect<{ project: ProjectSummary }>(
+    "PATCH",
+    `/api/projects/${projectId}`,
+    patch
+  );
+  return data.project;
+}
+
+/** Creates a project linked to an existing GitHub repo (import flow). */
+export async function connectRepo(
+  client: NexusClient,
+  repoFullName: string
+): Promise<ProjectSummary> {
+  const data = await client.expect<{ project: ProjectSummary }>(
+    "POST",
+    "/api/projects/import",
+    { repo: repoFullName }
+  );
+  return data.project;
+}
+
 export async function listFiles(
   client: NexusClient,
   projectId: string
@@ -109,11 +142,17 @@ export async function getCost(client: NexusClient, projectId: string): Promise<u
 
 export async function getAudit(
   client: NexusClient,
-  projectId: string
+  projectId: string,
+  filters?: { actor?: string; action?: string; q?: string; from?: string; to?: string }
 ): Promise<unknown[]> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters ?? {})) {
+    if (v) params.set(k, v);
+  }
+  const qs = params.toString();
   const data = await client.expect<{ events?: unknown[] }>(
     "GET",
-    `/api/projects/${projectId}/audit`
+    `/api/projects/${projectId}/audit${qs ? `?${qs}` : ""}`
   );
   return data.events ?? [];
 }
@@ -153,4 +192,128 @@ export async function undoLastRun(
   runId?: string
 ): Promise<{ undone: boolean; message: string }> {
   return client.expect("POST", `/api/projects/${projectId}/undo`, runId ? { runId } : {});
+}
+
+// --- Role Models (Model Router) & capabilities --------------------------------
+
+export interface RoleModelRow {
+  role: string;
+  provider: string;
+  model: string;
+}
+
+export async function getRoleModels(
+  client: NexusClient,
+  projectId: string
+): Promise<RoleModelRow[]> {
+  const data = await client.expect<{ roleModels: RoleModelRow[] }>(
+    "GET",
+    `/api/projects/${projectId}/role-models`
+  );
+  return data.roleModels ?? [];
+}
+
+export async function saveRoleModels(
+  client: NexusClient,
+  projectId: string,
+  roleModels: RoleModelRow[]
+): Promise<RoleModelRow[]> {
+  const data = await client.expect<{ roleModels: RoleModelRow[] }>(
+    "PUT",
+    `/api/projects/${projectId}/role-models`,
+    { roleModels }
+  );
+  return data.roleModels ?? [];
+}
+
+export type CapabilityMapPayload = Record<string, string[]>;
+
+export async function getCapabilities(
+  client: NexusClient,
+  projectId: string
+): Promise<CapabilityMapPayload> {
+  const data = await client.expect<{ capabilities: CapabilityMapPayload }>(
+    "GET",
+    `/api/projects/${projectId}/capabilities`
+  );
+  return data.capabilities;
+}
+
+export async function saveCapabilities(
+  client: NexusClient,
+  projectId: string,
+  capabilities: CapabilityMapPayload
+): Promise<CapabilityMapPayload> {
+  const data = await client.expect<{ capabilities: CapabilityMapPayload }>(
+    "PUT",
+    `/api/projects/${projectId}/capabilities`,
+    { capabilities }
+  );
+  return data.capabilities;
+}
+
+// --- Integrations (AI gateways + hosting hooks) --------------------------------
+
+export interface IntegrationEntry {
+  id: string;
+  type: string;
+  name: string;
+  base_url: string | null;
+  created_at?: string;
+}
+
+export async function listIntegrations(
+  client: NexusClient,
+  projectId: string
+): Promise<IntegrationEntry[]> {
+  const data = await client.expect<{ integrations: IntegrationEntry[] }>(
+    "GET",
+    `/api/projects/${projectId}/integrations`
+  );
+  return data.integrations ?? [];
+}
+
+export async function addIntegration(
+  client: NexusClient,
+  projectId: string,
+  integration: { type: "ai_provider" | "hosting"; name: string; baseUrl?: string; apiKey?: string }
+): Promise<IntegrationEntry> {
+  const data = await client.expect<{ integration: IntegrationEntry }>(
+    "POST",
+    `/api/projects/${projectId}/integrations`,
+    integration
+  );
+  return data.integration;
+}
+
+export async function deleteIntegration(
+  client: NexusClient,
+  projectId: string,
+  integrationId: string
+): Promise<void> {
+  await client.expect("DELETE", `/api/projects/${projectId}/integrations/${integrationId}`);
+}
+
+export async function testIntegration(
+  client: NexusClient,
+  projectId: string,
+  integrationId: string
+): Promise<unknown> {
+  return client.expect(
+    "POST",
+    `/api/projects/${projectId}/integrations/${integrationId}/test`,
+    {}
+  );
+}
+
+export async function listGatewayModels(
+  client: NexusClient,
+  projectId: string,
+  integrationName: string
+): Promise<string[]> {
+  const data = await client.expect<{ models?: string[] }>(
+    "GET",
+    `/api/projects/${projectId}/integrations/models?integration=${encodeURIComponent(integrationName)}`
+  );
+  return data.models ?? [];
 }

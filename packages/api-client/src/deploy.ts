@@ -67,10 +67,25 @@ export async function syncToGitHub(
 
 export async function listGitHubOwners(
   client: NexusClient
-): Promise<{ login: string; type: "User" | "Organization" }[]> {
-  const data = await client.expect<{ owners: { login: string; type: "User" | "Organization" }[] }>(
+): Promise<{ owners: { login: string; type: "User" | "Organization" }[]; activeOwner?: string }> {
+  return client.expect("GET", "/api/github/owners");
+}
+
+export async function listOwnerRepositories(
+  client: NexusClient,
+  owner: string
+): Promise<{ repos: { fullName: string; private: boolean; defaultBranch: string }[]; activeOwner?: string }> {
+  return client.expect(
     "GET",
-    "/api/github/owners"
+    `/api/github/owners?owner=${encodeURIComponent(owner)}`
   );
-  return data.owners ?? [];
+}
+
+export async function createGitHubRepo(
+  client: NexusClient,
+  name: string,
+  isPrivate: boolean,
+  owner?: string
+): Promise<{ repo: { fullName: string } }> {
+  return client.expect("POST", "/api/github/owners", { name, private: isPrivate, owner });
 }

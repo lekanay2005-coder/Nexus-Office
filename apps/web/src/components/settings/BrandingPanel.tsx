@@ -3,6 +3,9 @@
 import { useState } from "react";
 import NexusWatermark from "@/components/brand/NexusWatermark";
 import type { Project } from "@/types/db";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 // Addendum 4: per-project watermark/branding settings. All three flags live on
 // the project row; nothing existing changes.
@@ -30,16 +33,11 @@ export default function BrandingPanel({
   }) {
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Failed to save branding settings");
-    } else {
+    try {
+      await nexus.updateProject(project.id, patch);
       onChanged?.(patch); // let the parent react immediately (e.g. live preview)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save branding settings");
     }
     setSaving(false);
   }

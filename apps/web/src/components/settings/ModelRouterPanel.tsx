@@ -5,6 +5,9 @@ import { ROLES, type Role } from "@/types/db";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/pipeline/roles";
 import { MODEL_CATALOG, PROVIDER_LABELS } from "@/lib/providers/catalog";
 import { DEFAULT_PROVIDER_CONFIG, type ProviderName } from "@/lib/providers";
+import { createNexusClient } from "@nexus-office/api-client";
+
+const nexus = createNexusClient();
 
 interface RoleModelRow {
   role: Role;
@@ -87,16 +90,14 @@ export default function ModelRouterPanel({
         if (prev[gw]) return prev;
         (async () => {
           try {
-            const res = await fetch(
-              `/api/projects/${projectId}/integrations/models?integration=${encodeURIComponent(gw)}`
-            );
-            const data = await res.json().catch(() => null);
-            if (res.ok && data?.models?.length) {
-              setDynamicModels((p) => ({ ...p, [gw]: { models: data.models, loading: false } }));
+            const names = await nexus.listGatewayModels(projectId, gw);
+            const models = names.map((id) => ({ id, label: id }));
+            if (models.length) {
+              setDynamicModels((p) => ({ ...p, [gw]: { models, loading: false } }));
             } else {
               setDynamicModels((p) => ({
                 ...p,
-                [gw]: { models: [], loading: false, error: data?.error ?? `HTTP ${res.status}` },
+                [gw]: { models: [], loading: false, error: "No models returned" },
               }));
             }
           } catch (err) {
@@ -120,14 +121,14 @@ export default function ModelRouterPanel({
     setError(null);
     setAssignments((prev) => ({ ...prev, [role]: { role, provider, model } }));
 
-    const res = await fetch(`/api/projects/${projectId}/role-models`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, provider, model }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? `Failed to save ${ROLE_LABELS[role]} model`);
+    try {
+      await nexus.client.request("PUT", `/api/projects/${projectId}/role-models`, {
+        role,
+        provider,
+        model,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to save ${ROLE_LABELS[role]} model`);
     }
     setSavingRole(null);
   }
@@ -138,35 +139,27 @@ export default function ModelRouterPanel({
     setSavingKey(provider);
     setError(null);
 
-    const res = await fetch("/api/settings/api-keys", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, key }),
-    });
-
-    if (res.ok) {
+    try {
+      await nexus.saveApiKey(provider, key);
       setConfiguredKeys((prev) => new Set(prev).add(provider));
       setKeyDrafts((prev) => ({ ...prev, [provider]: "" }));
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? `Failed to save ${PROVIDER_LABELS[provider]} key`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to save ${PROVIDER_LABELS[provider]} key`);
     }
     setSavingKey(null);
   }
 
   async function removeKey(provider: ProviderName) {
     setSavingKey(provider);
-    const res = await fetch("/api/settings/api-keys", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider }),
-    });
-    if (res.ok) {
+    try {
+      await nexus.deleteApiKey(provider);
       setConfiguredKeys((prev) => {
         const next = new Set(prev);
         next.delete(provider);
         return next;
       });
+    } catch {
+      // key stays listed; user can retry
     }
     setSavingKey(null);
   }

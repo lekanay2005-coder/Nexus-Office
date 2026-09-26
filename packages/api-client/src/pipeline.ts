@@ -91,6 +91,33 @@ export async function runPipeline(
   return done;
 }
 
+/** One run's full transcript (steps nested), by run id. */
+export async function getPipelineRun(
+  client: NexusClient,
+  projectId: string,
+  runId: string
+): Promise<
+  | {
+      id: string;
+      user_message: string;
+      mode: string;
+      status: string;
+      error: string | null;
+      created_at: string;
+      pipeline_steps: {
+        id: string;
+        role: string;
+        step_order: number;
+        output: string | null;
+        model: string | null;
+      }[];
+    }
+  | null
+> {
+  const runs = await listPipelineRuns(client, projectId);
+  return runs.find((r) => r.id === runId) ?? null;
+}
+
 /** Full pipeline transcript for a project: runs with their nested steps. */
 export async function listPipelineRuns(
   client: NexusClient,
