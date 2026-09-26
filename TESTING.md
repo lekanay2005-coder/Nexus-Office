@@ -108,6 +108,17 @@ cannot be bundled; webpack fails with `Module not found: Can't resolve
 `/api/pipeline` route (all server-side). If a future dependency adds native
 or WASM modules, it likely needs the same `serverExternalPackages` treatment.
 
+### Vercel Root Directory / workspace build (monorepo)
+
+Since the Addendum 17 monorepo restructure, the Next.js app lives in
+`apps/web`, not the repo root. Vercel's Project Settings must have
+**Root Directory = `apps/web`**; the committed
+`apps/web/vercel.json` makes the install step run `cd ../.. && npm ci`
+from the repo root so npm workspaces link `@nexus-office/*` and
+`@nexus/*` packages correctly before `next build` runs. **After any
+monorepo/workspace change, verify Vercel's Root Directory and build
+command still match the actual app location — this broke once already.**
+
 ### Post-deploy verification
 
 - [ ] Vercel deployment shows "Ready", not "Error"
